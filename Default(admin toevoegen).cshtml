@@ -1,0 +1,109 @@
+﻿@{
+    //Layout = "~/Layout/_siteLayout.cshtml";
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    /*if (Request.Cookies["accountId"] != null && Request.Cookies["hash"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if (rol != "admin")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }*/
+    var email = Request.Form["email"];
+    string errormsg = "";
+    if(IsPost)
+	{
+        if  (true == true)//(decaan.ValidEmail(email, out errormsg))
+        {
+			Random random = new Random();
+            string rol = "decaan";
+            string password = "testtesttest";//RandomPass.GeneratePass(12, random);
+            string salt = LoginSLB.App_Code.Login.GetRandomSalt(password.Length);
+            string hashedPass = LoginSLB.App_Code.Login.HashPassword(password, salt);
+            db.Execute("INSERT INTO Gebruiker(rol,email,passwordHash,passwordSalt) VALUES(@0,@1,@2,@3)", rol, email, hashedPass, salt);
+            //stuur email naar nieuwe decaan
+            string leftLink = HttpContext.Current.Request.Url.GetLeftPart(UriPartial.Authority);
+            string inhoud = String.Format(Mailtjes.begin + 
+                          @"Er is een account voor je gemaakt met de rol Decaan.
+                            <br>
+							E-mailadres: {0}
+                            <br>
+							Wachtwoord: {1}
+                            <br>
+                            Log <a href=" + leftLink + @">hier</a> in.
+                            <br>
+                            Als de bovenstaande link niet werkt:" + leftLink + 
+                            Mailtjes.eind,email,password);
+            Mail mail = new Mail(inhoud);
+            mail.SendMail(email,"Decaan wachtwoord");
+            errormsg = "Decaan succesvol toegevoegd, er kan ingelogd worden met het toegestuurde wachtwoord.";
+        }
+    }
+}
+<div class="card-panel">
+    @*Terug*@
+    <a href="~/Admin">Klik hier om terug te gaan</a>
+    @*Decaan toevoegen*@
+    <div class="card-panel">
+        <form class="col s12" method="post"> 
+            <h5 class="header" style="color:#0085BC">Decaan Toevoegen</h5>
+            <div class="card-panel">
+                <div class="row">
+                    <p style="color:#00ff21">@errormsg</p>
+                    <div class="input-field col s12 m6">
+                        <input type="email" name="email" id="email" required>
+                        <label for="email">E-mailadres</label>
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="waves-effect comeniusblauw btn-large col s12 m6 l3"> Toevoegen </button>
+        </form>
+    </div>
+    @*Decaanlijst*@
+    <div class="card-panel">
+        <h5 style="color:#0085bc">Decaanlijst</h5>
+        <table class="responsive-table hoverable">
+            <thead>
+                <tr>
+                    <th>E-mailadres</th>
+                </tr>
+            </thead>
+            <tbody>
+                @{
+                    /*var decaanQuery = db.Query("SELECT email FROM Gebruiker WHERE rol = 'decaan'");
+                    foreach(var decaan in decaanQuery)
+                    {
+                        <tr>
+                            <td>@decaan.email</td>
+                        </tr>
+                    }*/
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
