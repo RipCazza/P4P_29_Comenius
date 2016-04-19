@@ -1,0 +1,128 @@
+﻿<div class="card-panel">
+@{
+    Layout="~/Layout/_siteLayoutNoNavbar.cshtml";
+    // Code om iemand uit te loggen
+    var action = Request.Params["a"];
+    if(action == "uitloggen")
+    {
+        Response.Cookies["accountId"].Value = "";
+        Response.Cookies["accountId"].Expires = DateTime.Now;
+        Response.Cookies["hash"].Value = "";
+        Response.Cookies["hash"].Expires = DateTime.Now;
+        Response.Redirect("/");
+    }
+    if(IsPost)
+    {
+         // Code om iemand in te loggen
+        var username = Request.Form["email"];
+        var password = Request.Form["wachtwoord"];
+        LoginSLB.App_Code.Login login = LoadLoginInfo(username, password);
+        Validation.RequireField("email", "Geen e-mailadres ingevuld!");
+        Validation.RequireField("wachtwoord", "Geen wachtwoord ingevuld!");
+        if(Validation.IsValid())
+        {
+            var errorLogin = login.ValidateLogin();
+            if(username.Length < 50 && password.Length < 50)
+            {
+                if (errorLogin == "")
+                {
+                    //Als er geen errors zijn wordt er gecontroleerd welke rol je bent en daarna word je doorverwezen
+                    var rol = LoggedIn(login);
+                    if(rol == "leerling")
+                    {
+                        Response.Redirect("~/Leerling");
+                    }
+                    else if(rol == "leraar")
+                    {
+                        Response.Redirect("~/Leraar");
+                    }
+                    else if(rol == "admin")
+                    {
+                        Response.Redirect("~/Admin");
+                    }
+                    else if(rol == "decaan")
+                    {
+                        Response.Redirect("~/Decaan");
+                    }
+                    else if(rol == "mentor")
+                    {
+                        Response.Redirect("~/Mentor");
+                    }
+                }
+                else
+                {
+                    //Als er een error is wordt deze hier weergegeven in rode letters
+                    <p style="color: red">@errorLogin</p>
+                }
+            }
+            else
+            {
+                //Als de gebruikersnaam of het wachtwoord over de 50 tekens lang is wordt deze error weergegeven in rode letters
+                <p style="color: red">Ingevoerde informatie is te lang</p>
+            }
+        }
+    }
+}
+@functions
+{
+    //Login functie
+    private LoginSLB.App_Code.Login LoadLoginInfo(string username, string password)
+    {
+        var db = Database.Open("Draaimolen");
+        //Laad de account credentials
+        var hash = db.QueryValue(@"SELECT passwordHash FROM Gebruiker WHERE email = @0", username);
+        var salt = db.QueryValue(@"SELECT passwordSalt FROM Gebruiker WHERE email = @0", username);
+        LoginSLB.App_Code.Login login = new LoginSLB.App_Code.Login(username, password, hash, salt);
+        db.Close();
+        return login;
+    }
+    
+    //Als de login succesvol is
+    private string LoggedIn(LoginSLB.App_Code.Login login)
+    {
+        string rol = "";
+        //Nieuwe salt en hash genereren
+        var db = Database.Open("Draaimolen");
+        string salt = login.NewSalt();
+        string hash = login.NewHash(salt);
+        db.Execute(@"UPDATE Gebruiker SET passwordHash=@0, passwordSalt=@1 WHERE email=@2", hash, salt, login.GetUsername());
+        //Zet de accountinfo in cookies
+        var idQuery = db.QuerySingle("SELECT GebruikerID, rol FROM Gebruiker WHERE email = @0", login.GetUsername());
+        Response.Cookies["accountId"].Value = idQuery.GebruikerID.ToString();
+        Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+        Response.Cookies["hash"].Value = hash;
+        Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+        db.Close();
+        //De rol opvragen
+        return rol = idQuery.rol;
+    }
+}
+
+@*Inlog formulier*@
+    <h5 class="header" style="color:#0085BC">Inloggen</h5>
+    <div class="row">
+        <form method="post" class="col s12">
+            <div class="row">
+                <div class="input-field col s12 m6 l12">
+                    <label for="email">School e-mailadres</label>
+                    <input name="email" type="text" class="validate" id="email">
+                    <p style="color: red">@Html.ValidationMessage("email")</p>
+                </div>
+                <div class="input-field col s12 m6 l12">
+                    <label for="wachtwoord">Wachtwoord</label>
+                    <input name="wachtwoord" type="password" class="validate" id="wachtwoord">
+                    <p style="color: red">@Html.ValidationMessage("Wachtwoord")</p>
+                </div>
+            </div>
+            <a href="~/Account/WachtwoordVergeten">Wachtwoord vergeten?</a>
+            <div class="row">
+                <div class="input-field col s12">
+                    <button type="submit" class="waves-effect comeniusblauw btn-large col s12 m6 l3">
+                        Inloggen
+                        <i class="mdi-content-send right"></i>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>

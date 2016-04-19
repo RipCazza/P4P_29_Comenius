@@ -1,0 +1,90 @@
+﻿@{
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    Layout = "~/Layout/_siteLayout.cshtml";
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "decaan")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }
+    int i = 0;
+    //haalt alle leraren uit de database
+    var leraren = db.Query("SELECT gebruikerId, email FROM Gebruiker WHERE rol = 'leraar' OR rol = 'mentor'");
+    var klassen = db.Query("SELECT DISTINCT klas FROM leerling");
+    string errormsg = "";
+    string successmsg = "";
+    if(IsPost)
+    {
+        var postedValues = Request.Form.GetValues("postField[]");
+        db.Execute("UPDATE Gebruiker SET rol = 'leraar' WHERE rol = 'mentor'");
+        db.Execute("DELETE FROM Mentor");
+        //voor elke klas wordt de mentor gewijzigd
+        foreach(var klas in klassen)
+        {
+            db.Execute("INSERT INTO Mentor VALUES(@0, @1)", postedValues[i], klas.klas);
+            db.Execute("UPDATE Gebruiker SET rol = 'mentor' WHERE gebruikerId = @0", postedValues[i]);
+            i++;
+            successmsg = "Mentoren succesvol gewijzigd!";
+        }
+    }
+}
+
+<div class="card-panel">
+    <form class="col 12" method="post">
+        <a href="~/Decaan">Terug naar vorige pagina</a>
+        <h5 class="header" style="color:#0085BC">Mentoren toewijzen</h5>
+        <div class="card-panel">
+            <p style="color:red">@errormsg</p>
+            <p style="color:green">@successmsg</p>
+            @*maakt voor elke klas een dropdownmenu met de dagen*@
+            @foreach(var klas in klassen)
+            {
+                var mentorHuidig = db.QueryValue("SELECT gebruikerId FROM Mentor WHERE klas = @0", klas.klas);
+                <div class="row">
+                    <p class="col s3">@klas.klas</p>
+                    <select name="postfield[]" class="col s9" required>
+                        @foreach(var leraar in leraren)
+                        {
+                            if(leraar.gebruikerId == mentorHuidig)
+                            {
+                                <option value= @leraar.gebruikerId selected>@leraar.email</option>
+                            }
+                            else
+                            {
+                                <option value= @leraar.gebruikerId>@leraar.email</option>
+                            }
+                        }
+                    </select>
+                </div>
+            }
+        </div>
+        <button type="submit" style="z-index: 0" class="waves-effect comeniusblauw btn-large col s12 m6 l3"> Bevestigen </button>
+    </form>
+</div>

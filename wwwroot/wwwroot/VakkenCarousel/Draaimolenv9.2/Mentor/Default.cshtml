@@ -1,0 +1,79 @@
+﻿@{
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    Layout = "~/Layout/_siteLayout.cshtml";
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            //Als je hash ongeldig is word je uitgelogd en doorverwezen
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "mentor")
+            {
+                //Als je rol niet mentor is word je doorverwezen
+                Response.Redirect("~/");
+            }
+            else
+            {
+                //Je sessie verlengen
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        //Als je niet ingelogd bent word je doorverwezen
+        Response.Redirect("~/");
+    }
+    //Haalt alle leerlingen op die hoort bij deze mentor.
+    var leerlingen = db.Query("SELECT leerling.gebruikerId, voornaam, achternaam FROM leerling, mentor WHERE mentor.gebruikerId = @0 AND mentor.Klas = leerling.klas", accountId);
+}
+
+<div class="card-panel">
+    <div class="row">
+        <a href="~/Leraar" class="btn waves-effect comeniusblauw">Mijn Rooster</a>
+    </div>
+    <table class="responsive-table hoverable centered">
+        <thead>
+            <tr>
+                <th>Voornaam</th>
+                <th>Achternaam</th>
+                <th>Ingeschreven?</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach(var leerling in leerlingen){
+            <tr style="cursor:pointer" onclick="window.location='/Rooster?id=@leerling.gebruikerId'">
+                    <td>@leerling.voornaam</td>
+                    <td>@leerling.achternaam</td>
+                    @{
+                    var leerlings = leerling.gebruikerID;
+                    //Kijkt of de gebruiker al een keuze heeft gemaakt
+                    var ingeschrevenleerling = db.QueryValue("SELECT gebruikerID FROM Keuze WHERE Keuze.gebruikerId = @0", leerlings);
+                        if(ingeschrevenleerling == null)
+                        {
+                            <td style="background-color:#ffeeee">Nee</td>
+                        }
+                        else
+                        {
+                            <td>Ja</td>
+                        }
+                    }
+                </tr>
+                }
+        </tbody>
+    </table>
+</div>

@@ -1,0 +1,30 @@
+﻿<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="x-ua-compatible" content="ie=edge">
+        <title>Comenius Voorlichtingen</title>
+        <meta name="description" content="Overzicht Voorlichtingen Comenius">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+        <link type="text/css" rel="stylesheet" href="~/css/materialize.css"  media="all"/>
+        <link type="text/css" rel="stylesheet" href="~/css/StyleSheet.css"  media="all"/>
+        <!-- Load JS -->
+        <script type="text/javascript" src="~/js/jquery-2.1.1.min.js"></script>
+        <script type="text/javascript" src="~/js/materialize.js"></script>
+        <script type="text/javascript" src="~/js/init.js"></script>
+    </head>
+    <body>
+        <!--Navigatiebalk-->
+        <header></header>
+        <!--Main Body-->
+        <main>
+            <div class="container">
+                @RenderBody()
+            </div>
+        </main>
+        <!--Footer-->
+        <footer class="page-footer comeniusgroen">
+            @RenderPage("~/Layout/footer.cshtml")
+        </footer>
+    </body>
+</html>

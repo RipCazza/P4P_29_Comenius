@@ -1,0 +1,69 @@
+﻿@{
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    Layout = "~/Layout/_siteLayout.cshtml";
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "decaan")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }   
+    //Haalt alle niveaus op die gekozen kunnen worden.
+    var vakken = db.Query("SELECT vakid, vaknaam, niveau FROM vakken ORDER BY vaknaam");
+    string errormsg = "";
+    string successmsg = "";
+    if(IsPost)
+    {
+        var vak = Request.Form["vak"];
+        var verwijder = db.Execute("DELETE FROM Vakken WHERE Vakid = @0", vak);
+        successmsg = "Voorlichting succesvol verwijderd!";
+    }
+}
+
+<div class="card-panel">
+    <form class="col 12" method="post">
+        <a href="~/Decaan">Terug naar vorige pagina</a>
+        <h5 class="header" style="color:#0085BC">Vak verwijderen</h5>
+        <div class="card-panel">
+            <div class="row">
+                <p style="color:green">@successmsg</p> 
+            </div>
+            <div class="row">
+                <select name="vak" class="col s6">
+                    @* Dropdown menu met alle niveaus *@
+                    @foreach(var vak in vakken)
+                    {
+                        <option value="@vak.vakid">@vak.vaknaam, @vak.niveau</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <button type="submit" style="z-index: 0" class="waves-effect comeniusblauw btn-large col s12 m6 l3">Verwijderen</button>
+    </form>
+</div>

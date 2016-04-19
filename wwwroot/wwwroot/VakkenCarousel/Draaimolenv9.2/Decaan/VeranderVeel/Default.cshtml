@@ -1,0 +1,150 @@
+﻿y@{
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    Layout = "~/Layout/_siteLayout.cshtml";
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "decaan")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                //ingelogd
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }
+    //Haalt de id's op van de vakjes die zijn aangevinkt op de vorige pagina. 
+    string sessionids = Convert.ToString(Session["sessionid"]);
+    var ids = sessionids.Split(',');
+    var datum = Request.Form["datum"];
+    var lokaal = Request.Form["lokaal"];
+    var beginuur = Request.Form["beginuur"];
+    var beginminuut = Request.Form["beginminuut"];
+    var einduur = Request.Form["einduur"];
+    var eindminuut = Request.Form["eindminuut"];
+    var rondeId = beginuur + ":" + beginminuut;
+    var docent = Request.Form["email"];
+    //Selecteert. alle emails van mensen die docent zijn.
+    var emails = db.Query("SELECT email FROM gebruiker WHERE rol = 'leraar'");
+    //Selecteert alle vakken.
+    var vakken = db.Query("SELECT vakid, vaknaam, niveau FROM vakken");
+    string errormsg = "";
+    string successmsg = "";
+    if(IsPost)
+    {
+        //Als de validatie succesvol is.
+        if(decaan.ValidDatum(datum, out errormsg) && decaan.ValidLokaal(lokaal, out errormsg))
+        {
+            //Voor alle aangevinkte vakjes:
+            foreach(var id in ids)
+            {
+                //Haal het gebruikterId op want hoor bij de docent van de voorlichting.
+                var gebruikerId = db.QueryValue("SELECT gebruikerId FROM gebruiker WHERE email = @0", docent);
+                //Update de tabel Voorlichtingen. 
+                db.Execute("Update Voorlichtingen SET datum = @0, rondeId = @1, lokaal = @2, gebruikerId = @3 WHERE vakid = @4", datum, rondeId, lokaal, gebruikerId, id);
+                successmsg = "Succesvol veranderd";
+            }
+        }
+        var begintijden = db.Query("SELECT DISTINCT rondeid FROM voorlichtingen");
+        List<string> tijden = new List<string>();
+        foreach(var tijd in begintijden)
+        {
+            tijden.Add(Convert.ToString(tijd.rondeid));
+        }
+        tijden.Sort();
+        int i = 0;
+        foreach(var tijd in tijden)
+        {
+            db.Execute("UPDATE bloktijden SET tijd = @0 WHERE blokId = @1", tijd, i);
+            db.Execute("UPDATE bloktijden SET tijd = @0 WHERE blokId = @1", tijd, i+4);
+            db.Execute("UPDATE bloktijden SET tijd = @0 WHERE blokId = @1", tijd, i+8);
+            db.Execute("UPDATE bloktijden SET tijd = @0 WHERE blokId = @1", tijd, i+12);
+            db.Execute("UPDATE bloktijden SET tijd = @0 WHERE blokId = @1", tijd, i+16);
+            i++;
+        }
+    }
+}
+
+
+<link rel="stylesheet" href="//code.jquery.com/ui/1.11.4/themes/smoothness/jquery-ui.css">
+<div class="card-panel">
+    <a href="~/Decaan/VoorlichtingenOverzicht">Terug naar voorlichtingenoverzicht</a>
+    <form class="col 12" method="post"> 
+        <h5 class="header" style="color:#0085BC">Voorlichting toevoegen</h5>
+        <div class="card-panel">
+            <div class="row">
+                <p style="color:red">@errormsg</p>
+                <p style="color:green">@successmsg</p>
+                <div class="input-field col s12 m6">
+                    <input class="datepicker" type="text" name = "datum" placeholder="dd/mm/yyyy">
+                </div>
+                <div class="input-field col s12 m6">
+                <select name="beginuur" class="col s3">
+                   @*Vier dropdown menus voor de tijd. *@
+                    @for(int i = 07; i < 18; i++)
+                    {
+                        <option value="@i">@i</option>
+                    }
+                </select>
+                <select name="beginminuut" class="col s3">
+                    <option value="00">00</option>
+                    <option value="05">05</option>
+                    @for(int i = 10; i < 60; i+=5)
+                    {
+                        <option value="@i">@i</option>
+                    }
+                </select>
+                @*<select name="einduur" class="col s3">
+                    @for(int i = 7; i < 18; i++){
+                        <option value="@i">@i</option>
+                    }
+                </select>
+                <select name="eindminuut" class="col s3">
+                    <option value="00">00</option>
+                    <option value="05">05</option>
+                    @for(int i = 10; i < 60; i+=5){
+                        <option value="@i">@i</option>
+                    }
+                </select>*@
+                    </div>
+                <div class="input-field col s12 m6">
+                    <input type="text" name="lokaal" placeholder="">
+                    <label for="lokaal">Lokaal</label>
+                </div>
+                <div class="input-field col s12 m6">
+                    <label for="email">Docent:</label>
+                    <select name="email">
+                        @* dropdownlist met alle docenten *@
+                        @foreach(var email in emails)
+                        {
+                            <option value="@email.email">@email.email</option>
+                        }
+                    </select>
+                </div>
+                <button type="submit" style="z-index: 0" class="waves-effect  comeniusblauw btn-large col s12 m6 l3"> Wijzig </button>
+            </div>
+        </div>
+    </form>
+</div>

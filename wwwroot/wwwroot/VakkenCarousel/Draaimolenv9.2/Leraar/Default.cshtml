@@ -1,0 +1,104 @@
+﻿@{
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    Layout = "~/Layout/_siteLayout.cshtml";
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            //Als je hash ongeldig is word je uitgelogd en doorverwezen
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "leraar" && rol != "mentor")
+            {
+                //Als je rol niet mentor is word je doorverwezen
+                Response.Redirect("~/");
+            }
+            else
+            {
+                //Je sessie verlengen
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        //Als je niet ingelogd bent word je doorverwezen
+        Response.Redirect("~/");
+    }
+    var vakid = db.Query("SELECT vakId FROM voorlichtingen WHERE voorlichtingen.gebruikerID = @0", accountId);
+}
+
+
+<div class="card-panel">
+    @*Leraar Tabel*@
+    <h6>Klik op de les om een overzicht van alle leerlingen te zien die bij die les komen.</h6>
+    <table class="responsive-table hoverable">
+        <thead>
+            <tr>
+                <th>Vak</th>
+                <th>Lokaal</th>
+                <th>Tijd</th>
+                <th>Datum</th>
+                <th>Niveau</th>
+                <th>Aantal personen</th>
+            </tr>
+        </thead>
+        <tbody>
+            @{
+                var voorlichtingen = db.Query("SELECT vakId, Vak, Lokaal, rondeId, datum, niveau FROM voorlichtingen WHERE gebruikerId = @0", accountId);
+                if(voorlichtingen.Count() > 0)
+                {
+                    foreach(var voorlichting in voorlichtingen)
+                    {
+                        //var count = db.QueryValue("SELECT SUM(aantalpers) + 1 FROM keuze WHERE keuze1 = @0 OR keuze2 = @0 OR keuze3 = @0 OR keuze4 = @0", voorlichting.vakid);
+                        int personen = 0;
+                        var keuzevakid = db.QueryValue("SELECT vakid FROM vakken WHERE vaknaam = @0", voorlichting.vak);
+                        var tabel = db.Query("SELECT aantalpers, keuze1 FROM Keuze WHERE keuze1 LIKE @0", "%"+keuzevakid+"%");
+                        foreach(var rij in tabel)
+                        {
+                            var ids = rij.keuze1.Split(','); 
+                            foreach(var id in ids){
+                                if(Convert.ToInt16(id) == keuzevakid)
+                                {
+                                    personen = personen + rij.aantalpers + 1;
+                                }
+                            }
+                        }
+                        <tr style="cursor:pointer" onclick="window.location='/Leraar/Leerlinglijst?id=@voorlichting.vakId'">
+                            <td>@voorlichting.Vak</td>
+                            <td>@voorlichting.lokaal</td>
+                            <td>@voorlichting.rondeId</td>
+                            <td>@voorlichting.datum</td>
+                            <td>@voorlichting.niveau</td>           
+                            <td>@personen</td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>

@@ -1,0 +1,43 @@
+﻿@{
+    var db = Database.Open("Draaimolen");
+    string naam = "";
+    var rol = "";
+    if(Request.Cookies["accountId"] != null)
+    {
+        var accountId = Request.Cookies["accountId"].Value;
+        rol = db.QueryValue(Queries.rolId, accountId);
+    }
+    else
+    {
+        Response.Redirect("/?a=uitloggen");
+    }
+    
+    <nav class="comeniusgroen">
+        <ul class="hide-on-med-and-down">
+            <li class="brand-logo center"><a style="height:64px;width:137px;padding:0px;margin:0px" href="~/Redirect"><img style="height:64px;width:137px" src="~/Images/logo-comenius.png" alt="Comenius"></a></li>
+        </ul>
+
+        <ul class="right hide-on-med-and-down">
+            <li><a href="~/Account/WijzigWachtwoord">Wijzig wachtwoord</a></li>
+            <li><a href="~/Account/WijzigEmail">Wijzig email</a></li>
+            @if(rol == "leerling")
+            {
+                <li><a href="Rooster">Rooster</a></li>
+            }
+            <li><a href='~/?a=uitloggen'>Uitloggen</a></li>
+        </ul>
+
+        <ul id="slide-out" class="side-nav">
+            <li><a href="~/Redirect">Home</a></li>
+            <li><a href="~/Account/WijzigWachtwoord">Wijzig wachtwoord</a></li>
+            <li><a href="~/Account/WijzigEmail">Wijzig email</a></li>
+            @if(rol == "leerling")
+            {
+                <li><a href="~/Rooster">Rooster</a></li>
+            }
+            <li><div class="divider"></div></li>
+            <li><a href="~/?a=uitloggen">Uitloggen</a></li>                
+        </ul>
+        <a href="#" data-activates="slide-out" class="button-collapse"><i class="mdi-navigation-menu"></i></a>
+    </nav>
+}

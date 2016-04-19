@@ -1,0 +1,54 @@
+﻿@{
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    Layout = "~/Layout/_siteLayout.cshtml";
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "decaan")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                //ingelogd
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }
+    <a href="~/Decaan/EmailOverzicht">Terug naar het mailoverzicht</a>
+    var emailId = Request["mailId"];
+    if(emailId != null){
+        try{
+            db.Execute("DELETE FROM Mails WHERE mailId = @0",emailId);
+            <p style="color:#00ff21">Mail succesvol verwijderd!</p>
+        }
+        catch(Exception e)
+        {
+            <p style="color: #f00">Fout opgetreden: @e.Message</p>
+        }
+    }
+    else{
+        <p style="color: #f00">Er is geen mailId meegegeven in de url</p>
+    }
+}
+

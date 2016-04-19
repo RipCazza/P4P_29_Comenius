@@ -1,0 +1,292 @@
+﻿@{
+    Layout = "~/Layout/_siteLayout.cshtml";
+    var db = Database.Open("Draaimolen");
+    var datums = db.Query("SELECT DISTINCT datum FROM voorlichtingen");
+    int dagenTotVoorlichting = (int)(DateTime.MaxValue - DateTime.Now).TotalDays + 1;
+    foreach (var datum in datums)
+    {
+        DateTime geldigeVoorlichtingsDatum;
+        bool validDateTime = DateTime.TryParse(datum.datum, out geldigeVoorlichtingsDatum);
+        if (validDateTime && (geldigeVoorlichtingsDatum - DateTime.Now).TotalDays < dagenTotVoorlichting)
+        {
+            dagenTotVoorlichting = (int)(geldigeVoorlichtingsDatum - DateTime.Now).TotalDays;
+        }
+    }
+    var accountId = 0;
+    Leerling leerling = new Leerling();
+    var problem = "";
+    if(Request.Cookies["accountId"] != null && Request.Cookies["hash"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "leerling")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                //ingelogd
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+                var naam = db.QuerySingle(Queries.naam, accountId);
+                if (naam.voornaam != null && naam.achternaam != null)
+                {
+                    leerling.naam = naam.voornaam + " " + naam.achternaam;
+                }
+                leerling.leerlingnummer = Convert.ToString(db.QueryValue(Queries.leerlingnummer, accountId));
+                leerling.klas = db.QueryValue(Queries.klas, accountId);
+                leerling.niveau = db.QueryValue(Queries.niveau, Convert.ToInt32(accountId));
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }
+    var keuzegemaakt = db.QueryValue("SELECT gebruikerID FROM keuze WHERE gebruikerID = @0", accountId);
+    var countvakkenvwo = db.QueryValue("SELECT count(niveau) FROM vakken WHERE niveau LIKE '%vwo'");
+    var countvakkenhavo = db.QueryValue("SELECT count(niveau) FROM vakken WHERE niveau LIKE 'havo%'");
+   
+    
+    if(IsPost)
+    {
+        //Indien een vakje is ingedrukt:
+        if(!Request["check"].IsEmpty())
+        {
+            //Foutmelding indien te veel of te weinig voorlichtingen gekozen.
+            if((Request["check"].Split(',').Count() < 2 || Request["check"].Split(',').Count() > 4))
+            {
+                problem = "Kies alsjeblieft twee tot vier voorlichtingen.";
+            }
+            else
+            {
+                    var personen = Request.Form["personen"];
+                    //Als leerling al eerder keuze heeft gemaakt, krijg je een update-query.
+                    if(keuzegemaakt > 0)
+                    {
+                    var update = db.Execute("Update keuze SET keuze1 = @0, aantalpers = @1 WHERE gebruikerID = @2", Request["check"], personen, accountId);
+                    }
+                    //Als de leerling voor de eerste keuze gemaakt, krijg je een insertinto-query.
+                    else
+                    {
+                    var insert = db.Execute("INSERT INTO keuze (gebruikerID, keuze1, aantalpers) VALUES (@0, @1, @2)", accountId, Request["check"], personen);    
+                    }
+                    Response.Redirect("~/Leerling?a=succes");
+            }   
+        }
+        //Indien geen enkel vakje is ingedrukt:
+        else
+        {   
+            if(countvakkenhavo <= 4)
+            {
+                problem = "Kies alsjeblieft twee tot vier voorlichtingen.";    
+            }
+            if (countvakkenvwo <= 4)
+            {
+                problem = "Kies alsjeblieft twee tot vier voorlichtingen.";
+            }
+            var personen = Request.Form["personen"];
+            string vakkenadd = "";
+            if(leerling.niveau == "ath3" || leerling.niveau == "ath4" ){
+                var vakken = db.Query("SELECT vakid FROM vakken WHERE niveau = 'vwo' OR niveau = 'havo & vwo'");
+                foreach(var vak in vakken)  
+                {
+                    if(vakkenadd == "")
+                    {
+                        vakkenadd += vak.vakid;    
+                    }
+                    else
+                    {
+                    vakkenadd += "," + vak.vakid;    
+                    }
+                }
+                //Als leerling al eerder keuze heeft gemaakt, krijg je een update-query.
+                if(keuzegemaakt > 0)
+                {
+                    var update = db.Execute("Update keuze SET keuze1 = @0, aantalpers = @1 WHERE gebruikerID = @2", vakkenadd, personen, accountId);
+                }
+                //Als de leerling voor de eerste keuze gemaakt, krijg je een insertinto-query.
+                else
+                {
+                    var insert = db.Execute("INSERT INTO keuze (gebruikerID, keuze1, aantalpers) VALUES (@0, @1, @2)", accountId, vakkenadd, personen);    
+                }
+                Response.Redirect("~/Leerling?a=succes");
+            }
+            if(leerling.niveau == "ha3" || leerling.niveau == "ha4")
+            {
+                var vakken = db.Query("SELECT vakid FROM vakken WHERE niveau = 'havo' OR niveau = 'havo & vwo'");
+                foreach(var vak in vakken)  
+                {
+                    if(vakkenadd == "")
+                    {
+                        vakkenadd += vak.vakid;    
+                    }
+                    else
+                    {
+                    vakkenadd += "," + vak.vakid;    
+                    }
+                }
+                //Als leerling al eerder keuze heeft gemaakt, krijg je een update-query.
+                if(keuzegemaakt > 0)
+                {
+                    var update = db.Execute("Update keuze SET keuze1 = @0, aantalpers = @1 WHERE gebruikerID = @2", vakkenadd, personen, accountId);
+                }
+                //Als de leerling voor de eerste keuze gemaakt, krijg je een insertinto-query.
+                else
+                {
+                    var insert = db.Execute("INSERT INTO keuze (gebruikerID, keuze1, aantalpers) VALUES (@0, @1, @2)", accountId, vakkenadd, personen);    
+                }
+                Response.Redirect("~/Leerling?a=succes");    
+            }
+        }
+    }
+}
+
+
+@{
+    if(dagenTotVoorlichting > 14)
+    {
+        var a = Request.Params["a"];
+        if(a == "succes")
+        {
+            <div class="card-panel">
+                <h5 style="color:#0085BC">Succesvol aangemeld! Je ontvangt een mailtje als de roosters bekend zijn. <a href="~/?a=uitloggen">Klik hier om uit te loggen.</a></h5>
+            </div>
+        }
+        else
+        {
+            @*De pagina met het formulier*@
+            <script type="text/javascript" src="~/js/LeerlingAnimatie.js"></script>
+            <div class="card-panel">
+                <p style="color:red">@problem</p>
+                <h5 class="header" style="color:#0085BC">Inschrijven voor voorlichtingen</h5>
+                <div class="card-panel">
+                    <div class="row">
+                        <div class="input-field col s12 m6">
+                            <input disabled type="text" value="@leerling.naam" id="naam">
+                            <label for="niveau">Volledige naam</label>
+                        </div>
+                        <div class="input-field col s12 m6">
+                            <input disabled type="text" value="@leerling.leerlingnummer" id="leerlingnummer">
+                            <label for="niveau">Leerlingnummer</label>
+                        </div>
+                        <div class="input-field col s12 m6">
+                            <input disabled type="text" value="@leerling.klas" id="klas">
+                            <label for="niveau">Klas</label>
+                        </div>
+                        <div class="input-field col s12 m6">
+                            <input disabled type="text" value="@leerling.niveau" id="niveau">
+                            <label for="niveau">Niveau</label>
+                        </div>
+                    </div>
+                    <div class="row">
+                        @*Als de leerling al een keuze gemaakt heeft, krijgt hij deze te zien als hij weer ingelogd.*@
+                        @if(keuzegemaakt > 0)
+                        {
+                            string gemaaktekeuze = db.QueryValue("SELECT keuze1 FROM keuze WHERE gebruikerid = @0", accountId);
+                            var aantalpers = db.QueryValue("SELECT aantalpers FROM keuze WHERE gebruikerid = @0", accountId);
+                            //Afhankelijk van het aantal keuzes die gemaakt zijn, komen er vakjes in beeld. 
+                            var keuzes = gemaaktekeuze.Split(',');
+                            foreach(var keuze in keuzes)
+                            {
+                                var vakkeuze1 = db.QuerySingle("SELECT vaknaam FROM vakken WHERE vakid = @0", keuze);
+                                <div class="input-field col s12 m6">
+                                    <input disabled type="text" value="@vakkeuze1.vaknaam" id="keuze">
+                                    <label for="keuze">Keuze:</label>
+                                </div> 
+                            }
+                        
+                        <div class="input-field col s12 m6">
+                            <input disabled type="text" value="@aantalpers" id="aantalpers">
+                            <label for="aantalpers">Aantal personen:</label>
+                        </div>
+                        }
+                    </div>
+                </div>
+                <form class="col 12" method="post">
+                    <div class="row">
+                        <!--Hoeveel ouders-->
+                        <div class="input-field col s12">
+                            <select name="personen">
+                                <option value="0">Geen ouders/verzorgers</option>
+                                <option value="1">Eén ouder/verzorger</option>
+                                <option value="2">Twee ouders/verzorgers</option>
+                            </select>
+                            <label for="ouders">Hoeveel ouders/verzorgers neem je mee?</label>
+                        </div>
+                    </div>
+                    @if(countvakkenhavo > 4)
+                    { 
+                        if(leerling.niveau == "ha3" || leerling.niveau == "ha4")
+                        {
+                            <div id="voorlichtingkeuzemenu">
+                            <h5 style="color:#0085bc">Talentstroom opties</h5>
+                            <p style="margin:0px;font-size:12px;">Je moet minimaal <b style="color:#0085BC">2</b> opties kiezen en maximaal <b style="color:#0085BC">4</b>.</p>
+                            <!--Met jQuery dynamisch tellen hoeveel voorlichtingen zijn aangevinkt-->
+                            <p style="margin:0px;font-size:12px;">Er zijn <b id="teller" style="color:#0085BC">0</b> voorlichtingen geselecteerd.</p>
+                        @{
+                            //Haalt alle kiesbare voorlichtingen uit database.
+                            var voorlichtingen = db.Query("SELECT vaknaam, vakid FROM vakken WHERE niveau = 'havo' OR niveau = 'havo & vwo'");
+                            foreach(var voorlichting in voorlichtingen)
+                            {
+                                <p class="voorlichting">
+                                    <input type="checkbox" name="check" id="@voorlichting.vakId" value="@voorlichting.vakId"/>
+                                    <label for="@voorlichting.vakId">@voorlichting.vaknaam</label>
+                                </p>
+                            }
+                        }
+                        </div>
+                        }    
+    	            }
+                    @if(countvakkenvwo > 4)
+                    {
+                        if (leerling.niveau == "ath3" || leerling.niveau == "ath4")
+                        {
+                            var voorlichtingen = db.Query("SELECT vaknaam, vakid FROM vakken WHERE niveau = 'vwo' OR niveau = 'havo & vwo'");
+                            <div id="voorlichtingkeuzemenu">
+                            <h5 style="color:#0085bc">Talentstroom opties</h5>
+                            <p style="margin:0px;font-size:12px;">Je moet minimaal <b style="color:#0085BC">2</b> opties kiezen en maximaal <b style="color:#0085BC">4</b>.</p>
+                            <!--Met jQuery dynamisch tellen hoeveel voorlichtingen zijn aangevinkt-->
+                            <p style="margin:0px;font-size:12px;">Er zijn <b id="teller" style="color:#0085BC">0</b> voorlichtingen geselecteerd.</p>
+                            @foreach(var voorlichting in voorlichtingen)
+                            {
+                                <p class="voorlichting">
+                                    <input type="checkbox" name="check" id="@voorlichting.vakId" value="@voorlichting.vakId"/>
+                                    <label for="@voorlichting.vakId">@voorlichting.vaknaam</label>
+                                </p>
+                            }  
+                            </div>  
+                        }  
+                    }     
+                    <div class="row">
+                        <div class="input-field col s12">
+                            <button style="z-index:0" class="btn waves-effect comeniusblauw btn-large col s12 m6 l3" type="submit" name="action">
+                                Verzenden
+                                <i class="mdi-content-send right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="card-panel">
+                <h5 style="color:#0085BC">Het is dit moment niet meer mogelijk om je in te schrijven voor de voorlichtingen. Bekijk je rooster <a href="~/Rooster">hier.</a></h5>
+        </div>    
+    }
+}

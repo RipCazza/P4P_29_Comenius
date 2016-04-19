@@ -1,0 +1,100 @@
+﻿@{
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    Layout = "~/Layout/_siteLayout.cshtml";
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "decaan")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }   
+    //Haalt alle niveaus op die gekozen kunnen worden.
+    var niveaus = db.Query("SELECT niveau FROM vakken GROUP BY niveau");
+    string errormsg = "";
+    string successmsg = "";
+    var leraren = db.Query("SELECT GebruikerId, email FROM Gebruiker WHERE rol = 'leraar'");
+    if(IsPost){
+        //Kijkt wat het hoogste vakid is in de database.
+        var vakid = db.QueryValue("SELECT max(vakid) FROM vakken");
+        var newvakid = -1;
+        if (vakid == null)
+        {
+            newvakid = 0;
+        }
+        else
+        {
+            //Ophhogen van het vakid.
+            newvakid = vakid + 1;
+        }
+        var vak = Request.Form["vak"];
+        var niveau = Request.Form["niveau"];
+        var leraar = Request.Form["leraar"];
+        //Indien de validatie valide is:
+        if(decaan.ValidVak(vak, out errormsg))
+        {
+            //Voeg het vak toe aan de database met de ingevulde informatie.
+            var toevoegen = db.Execute("INSERT INTO Vakken (vakid, vaknaam, niveau, leraar) Values (@0, @1, @2, @3)", newvakid, vak, niveau, leraar);
+            successmsg = "Voorlichting succesvol toegevoegd!";
+        }
+    }
+}
+
+<div class="card-panel">
+    <form class="col 12" method="post">
+        <a href="~/Decaan">Terug naar vorige pagina</a>
+        <h5 class="header" style="color:#0085BC">Vak toevoegen</h5>
+        <div class="card-panel">
+            <div class="row">
+                <p style="color:red">@errormsg</p>
+                <p style="color:green">@successmsg</p>
+                <div class="input-field col s12 m6">
+                    <input type="text" name="vak" id="vak">
+                    <label for="vak">Vak</label>
+                </div>
+            </div>
+            <div class="row">
+                <select name="niveau" class="col s6">
+                    @* Dropdown menu met alle niveaus *@
+                    @foreach(var niv in niveaus)
+                    {
+                        <option value="@niv.niveau">@niv.niveau</option>
+                    }
+                </select>
+                <select name="leraar" class="col s6">
+                    @* Dropdown menu met alle niveaus *@
+                    @foreach(var l in leraren)
+                    {
+                        <option value="@l.GebruikerId">@l.email</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <button type="submit" style="z-index: 0" class="waves-effect comeniusblauw btn-large col s12 m6 l3"> Toevoegen </button>
+    </form>
+</div>

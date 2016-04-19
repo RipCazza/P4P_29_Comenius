@@ -1,0 +1,121 @@
+﻿@{
+    Layout = "~/Layout/_siteLayout.cshtml";
+
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            //Als je hash ongeldig is word je doorverwezen
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "decaan")
+            {
+                //Als je rol niet leraar is word je doorverwezen
+                Response.Redirect("~/");
+            }
+            else
+            {
+                //Je sessie verlengen
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        //Als je niet ingelogd bent word je doorverwezen
+        Response.Redirect("~/");
+    }
+    var leerlingen = db.Query("SELECT Gebruiker.gebruikerId, Leerling.voornaam, Leerling.achternaam, Leerling.klas FROM Gebruiker INNER JOIN Leerling ON Gebruiker.gebruikerId = Leerling.gebruikerId ORDER BY klas, achternaam");
+    /// Selecteert alle vakken die meedoen aan carousel
+    var vakken = db.Query("SELECT niveau, vakid, Vak, Lokaal, email, RondeId, datum FROM voorlichtingen, gebruiker WHERE voorlichtingen.gebruikerID = gebruiker.gebruikerID ORDER BY vak, niveau, datum, rondeID");
+}
+<div class="card-panel">
+    <h5 style="color:#0085bc">Management voor de decaan</h5>
+    <ul class="collapsible" data-collapsible="accordion">
+        <li>
+            <div class="collapsible-header"><i class="mdi-content-add"></i>Toevoegen</div>
+            <div class="collapsible-body">
+                <p style="display:inline-block"><a href="~/Decaan/LeerlingToevoegen">Leerling</a></p>
+				<p style="display:inline-block"><a href="~/Decaan/LeraarToevoegen">Leraar</a></p>
+				<p style="display:inline-block"><a href="~/Decaan/VakToevoegen">Vak</a></p>
+				<p style="display:inline-block"><a href="~/Decaan/LokaalToevoegen">Lokaal</a></p>
+            </div>
+        </li>
+        <li>
+            <div class="collapsible-header"><i class="mdi-content-create"></i>Wijzigen</div>
+            <div class="collapsible-body">
+                <p style="display:inline-block"><a href="~/Decaan/LokaalToevoegen">Lokaal</a></p>
+                <p style="display:inline-block"><a href="~/Decaan/Talentstromen">Talentstromen</a></p>
+                <p style="display:inline-block"><a href="~/Decaan/Mentoren">Mentor</a></p>
+				<p style="display:inline-block"><a href="~/Decaan/EmailOverzicht">Mailtjes</a></p>
+            </div>
+        </li>
+        <li>
+            <div class="collapsible-header"><i class="mdi-content-clear"></i>Verwijderen</div>
+            <div class="collapsible-body">
+                <p style="display:inline-block"><a href="~/Decaan/LeraarVerwijderen">Leraar</a></p>
+                <p style="display:inline-block"><a href="~/Decaan/VakVerwijderen">Vak</a></p>
+            </div>
+        </li>
+        <li>
+            <div class="collapsible-header"><i class="mdi-content-sort"></i>Overzicht</div>
+            <div class="collapsible-body">
+                <p style="display:inline-block"><a href="~/Decaan/KlassenOverzicht">Klassen</a></p>
+                <p style="display:inline-block"><a href="~/Decaan/VoorlichtingenOverzicht">Voorlichtingen</a></p>
+            </div>
+        </li>
+    </ul>
+    @*Accordion inschakelen*@
+    <script>
+        $(document).ready(function(){
+            $('.collapsible').collapsible({
+                accordion : true // A setting that changes the collapsible behavior to expandable instead of the default accordion style
+            });
+        });
+    </script>
+    <br>@*Een beetje ruimte creëren*@
+    <h5 style="color:#0085bc">Leerlinglijst</h5>
+    <p>Deze leerlingen hebben zich niet ingeschreven:</p>
+    <table class="responsive-table hoverable centered z-depth-1">
+        <thead>
+            <tr>
+                <th>Voornaam</th>
+                <th>Achternaam</th>
+                <th>Klas</th>
+                <th>Ingeschreven?</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach(var leerling in leerlingen)
+            {
+                    var leerlings = leerling.gebruikerID;
+                    //Kijkt of de leerling zich al heeft ingeschreven of niet.
+                    var ingeschrevenleerling = db.QueryValue("SELECT gebruikerID FROM Keuze WHERE Keuze.gebruikerId = @0", leerlings);
+                    <tr style="cursor:pointer" onclick="window.location='/Rooster?id=@leerling.gebruikerId'">
+                    @if(ingeschrevenleerling == null)
+                    {
+                        <td>@leerling.voornaam</td>
+                        <td>@leerling.achternaam</td>
+                        <td>@leerling.klas</td>
+                        <td style="background-color:#ffeeee">Nee</td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

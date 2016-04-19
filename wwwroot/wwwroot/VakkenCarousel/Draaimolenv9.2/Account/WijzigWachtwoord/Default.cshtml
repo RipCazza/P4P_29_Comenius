@@ -1,0 +1,129 @@
+﻿@{
+    var accountId = 0;
+    Database db = Database.Open("Draaimolen");
+    if (Request.Cookies["accountId"] != null && Request.Cookies["hash"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            //Als de hash ongeldig is word je uitgelogd
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            //De rol wordt aangevraagd en je sessie wordt verlengd
+            Response.Cookies["accountId"].Value = accountId.ToString();
+            Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+            Response.Cookies["hash"].Value = hash;
+            Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+        }
+    }
+    else
+    {
+        //Doorverwijzen als je niet ingelogd bent
+        Response.Redirect("~/?a=uitloggen");
+    }
+    Layout="~/Layout/_siteLayout.cshtml";
+    Validation.RequireField("currentPassword","Vul hier uw wachtwoord in");
+    Validation.RequireField("newPassword","Vul hier uw nieuwe wachtwoord in");
+    Validation.RequireField("confirmPassword","Herhaal hier je nieuwe wachtwoord");
+    Validation.Add("currentPassword",Validator.StringLength(25,6,"Uw ingevoerde wachtwoord moet tussen de 6 en de 25 tekens zitten."));
+    //Het nieuwe wachtwoord moet langer zijn dan 6 tekens en korter dan 25, moet minimaal 1 hoofdleter kleine letter en cijfer bevatten.
+    Validation.Add("newPassword",Validator.Regex(@"^(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{6,25}$","Je wachtwoord moet langer zijn dan 6 en korter zijn dan 25 tekens en moet minimaal 1 hoofdletter, kleine letter en cijfer bevatten."));
+    //controleer of newPassword en confirmPassword hetzelfde is
+    Validation.Add("confirmPassword",Validator.EqualsTo("newPassword","Het bevestigingswachtwoord kwam niet overeen met het nieuwe wachtwoord."));
+    if(IsPost && Validation.IsValid())
+    {
+        var currentPassword = Request["currentPassword"];
+        var newPassword = Request["newPassword"];
+        var confirmPassword = Request["confirmPassword"];
+        //controleer of de hash van de currentPassword en salt overeenkomt met de hash in de database
+        var salt = db.QueryValue("SELECT passwordSalt FROM Gebruiker WHERE GebruikerId = @0",accountId);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerId = @0",accountId);
+        var hashCheck = LoginSLB.App_Code.Login.HashPassword(currentPassword,salt);
+        if(hashCheck != hash)
+        {
+            //onjuist wachtwoord
+            ModelState.AddError("currentPassword","Je huidige wachtwoord is onjuist");
+        }
+        //Als alles klopt, wijzig het wachtwoord
+        else
+        {
+            //juist wachtwoord
+            //verander het wachtwoord
+            var newSalt = LoginSLB.App_Code.Login.GetRandomSalt(newPassword.Length);
+            var newHash = LoginSLB.App_Code.Login.HashPassword(newPassword,newSalt);
+            db.Execute("UPDATE Gebruiker SET passwordHash=@0,passwordSalt=@1 WHERE GebruikerId = @2;",newHash,newSalt,accountId);
+            Response.Redirect("~/Account/WijzigWachtwoord?a=succes");
+        }
+    }
+}
+@*
+<script type="text/javascript">
+    $(document).ready(function () {
+        $("#repPass").change(function () {
+            var newPassword = $('#nPass').val();
+            var repPassword = $('#repPass').val();
+            if (newPassword === repPassword) {
+                function () { 
+                    $('#passfield').append('<p>geslaagd</p>');
+                };
+            }
+        })
+    });
+</script>
+*@
+<div class="card-panel">
+    @{var a = Request.Params["a"];}
+    @if(a == "succes")
+    {
+        <p style="color:green">Je wachtwoord is gewijzigd! Klik <a href="~/">hier</a> om terug te gaan.</p>
+    }
+    else
+    {
+    <h5 style="color:#0085bc">Wijzig wachtwoord</h5>
+    <div class="row">
+        <p class="light">Gebruik minimaal 6 tekens, waarvan één hoofdletter en één kleine letter.</p>
+            <form class="col s12" method="post">
+                <div class="row" id="passfield">
+                    @*Huidig wachtwoord*@
+                    <div class="row">
+                        <div class="input-field col s12">
+                            <input name="currentPassword" type="password" class="validate" id="currentPassword">
+                            <label for="currentPassword">Huidig wachtwoord</label>
+                            <p style="color: red">@Html.ValidationMessage("currentPassword")</p>
+                        </div>
+                    </div>
+                    @*Nieuw wachtwoord*@
+                    <div class="row">
+                        <div class="input-field col s12">
+                            <input name="newPassword" type="password" class="validate" id="newPassword">
+                            <label for="newPassword">Nieuw wachtwoord</label>
+                            <p style="color: red">@Html.ValidationMessage("newPassword")</p>
+                        </div>
+                    </div>
+                    @*Bevestig wachtwoord*@
+                    <div class="row">
+                        <div class="input-field col s12">
+                            <input name="confirmPassword" type="password" class="validate" id="confirmPassword">
+                            <label for="confirmPassword">Bevestig wachtwoord</label>
+                            <p style="color: red">@Html.ValidationMessage("confirmPassword")</p>
+                        </div>
+                    </div>
+                     <div class="row">
+                         <div class="input-field col s12">
+                            <button style="z-index:0" type="submit" class="waves-effect comeniusblauw btn-large col s12">
+                            Wijzig Wachtwoord
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+    </div>
+    }
+</div>

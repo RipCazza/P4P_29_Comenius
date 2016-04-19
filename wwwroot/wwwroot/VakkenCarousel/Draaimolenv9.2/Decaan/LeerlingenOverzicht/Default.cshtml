@@ -1,0 +1,95 @@
+﻿@{  
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    Layout = "~/Layout/_siteLayout.cshtml";
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "decaan")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                //ingelogd
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }
+    //Select alle leerlingen
+    var leerlingen = db.Query("SELECT voornaam, achternaam, klas, talentstroom, email FROM leerling INNER JOIN Gebruiker ON Leerling.gebruikerId = Gebruiker.gebruikerId ORDER BY klas");
+    var OrderBy = Request.Params["OrderBy"];
+    if(OrderBy == "klas"){}
+    else if(OrderBy == "voornaam")
+    {
+        leerlingen = db.Query("SELECT voornaam, achternaam, klas, talentstroom, email FROM leerling INNER JOIN Gebruiker ON Leerling.gebruikerId = Gebruiker.gebruikerId ORDER BY voornaam");
+    }
+    else if(OrderBy == "achternaam")
+    {
+        leerlingen = db.Query("SELECT voornaam, achternaam, klas, talentstroom, email FROM leerling INNER JOIN Gebruiker ON Leerling.gebruikerId = Gebruiker.gebruikerId ORDER BY achternaam");
+    }
+    else if(OrderBy == "klas")
+    {
+        leerlingen = db.Query("SELECT voornaam, achternaam, klas, talentstroom, email FROM leerling INNER JOIN Gebruiker ON Leerling.gebruikerId = Gebruiker.gebruikerId ORDER BY klas");
+    }
+    else if(OrderBy == "talentstroom")
+    {
+        leerlingen = db.Query("SELECT voornaam, achternaam, klas, talentstroom, email FROM leerling INNER JOIN Gebruiker ON Leerling.gebruikerId = Gebruiker.gebruikerId ORDER BY talentstroom");
+    }
+    else if(OrderBy == "email")
+    {
+        leerlingen = db.Query("SELECT voornaam, achternaam, klas, talentstroom, email FROM leerling INNER JOIN Gebruiker ON Leerling.gebruikerId = Gebruiker.gebruikerId ORDER BY email");
+    }
+    else if(OrderBy == "gebruikerId")
+    {
+        leerlingen = db.Query("SELECT voornaam, achternaam, klas, talentstroom, email FROM leerling INNER JOIN Gebruiker ON Leerling.gebruikerId = Gebruiker.gebruikerId ORDER BY gebruikerId");
+    }   
+}
+
+<div class="card-panel">
+    <a href="~/Decaan">Terug naar vorige pagina</a>
+    <h5 style="color:#0085BC">Leerlinglijst</h5>
+    <p>Klik op een kolomnaam om de tabel te sorteren.</p>
+    <table class="responsive-table hoverable centered">
+        <thead>
+            <tr>
+                <th><a href="~/Decaan/LeerlingenOverzicht?OrderBy=voornaam">Voornaam</a></th>
+                <th><a href="~/Decaan/LeerlingenOverzicht?OrderBy=achternaam">Achternaam</a></th>
+                <th><a href="~/Decaan/LeerlingenOverzicht?OrderBy=klas">Klas</a></th>
+                <th><a href="~/Decaan/LeerlingenOverzicht?OrderBy=talentstroom">Talentstroom</a></th>
+                <th><a href="~/Decaan/LeerlingenOverzicht?OrderBy=email">E-mailadres</a></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach(var leerling in leerlingen)
+            {
+            <tr>
+                <td>@leerling.voornaam</td>
+                <td>@leerling.achternaam</td>
+                <td>@leerling.klas</td>
+                <td>@leerling.talentstroom</td>
+                <td>@leerling.email</td>
+            </tr>
+            }
+        </tbody>
+    </table>
+</div>

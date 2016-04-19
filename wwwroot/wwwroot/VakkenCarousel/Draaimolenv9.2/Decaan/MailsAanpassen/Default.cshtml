@@ -1,0 +1,80 @@
+﻿@{
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    Layout = "~/Layout/_siteLayout.cshtml";
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "decaan")
+            {
+                Response.Redirect("~/Redirect");
+            }
+            else
+            {
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }   
+    var mailId = Request["MailId"];
+    if (mailId == null)
+    {
+        Response.Redirect("~/Redirect");
+    }
+    int aantalmails = Convert.ToInt32(db.QueryValue("SELECT COUNT(*) FROM Mails WHERE MailId = @0",mailId));
+    if (aantalmails != 1)
+    {
+        Response.Redirect("~/Redirect");
+    }
+    var mailInhoud = db.QuerySingle("SELECT * FROM Mails WHERE MailId = @0", mailId);
+    string inhoudToHtml = mailInhoud.inhoud;
+    string inhoudToString = inhoudToHtml.Replace("<br>", Environment.NewLine);
+    Validation.Add("onderwerp",Validator.StringLength(199,0,"Het onderwerp moet tussen de 0 en de 200 karakters lang zijn."));
+    Validation.Add("beschrijving",Validator.StringLength(249,0,"Het onderwerp moet tussen de 0 en de 250 karakters lang zijn."));
+    if (IsPost && Validation.IsValid())
+    {
+        string onderwerp = Request["mailOnderwerp"];
+        string inhoud = Request.Unvalidated("mailInhoud");
+        string inhoudHtml = inhoud.Replace(Environment.NewLine, "<br>");
+        string beschrijving = Request["mailBeschrijving"];
+        db.Execute("UPDATE Mails SET onderwerp=@0,inhoud=@1,beschrijving=@2 WHERE MailId=@3", onderwerp, inhoudHtml, beschrijving, mailId);
+    }
+}
+
+<div class="card-panel">
+    <a href="~/Decaan/EmailOverzicht">Terug naar het mailoverzicht</a>
+    <h1>Mail aanpassen</h1>
+    <p>Pas hier de email aan.<br>
+       Je kunt het vak voor de inhoud vergroten door het vak rechts onderin te verslepen.</p>
+    <form method="post">
+        @Html.ValidationMessage("mailOnderwerp")
+        <strong>Onderwerp</strong>
+        <input type="text" value="@mailInhoud.onderwerp" id="onderwerp" name="mailOnderwerp"/>
+        <strong>Inhoud</strong>
+        <textarea name="mailInhoud" rows="@inhoudToString.Split('\n').Length">@inhoudToString</textarea>
+        <p>Dit is de beschrijving voor de e-mail. 
+           Dit wordt alleen gebruikt als geheugensteuntje om te weten waar de mail over gaat en wordt nergens gebruikt.</p>
+        @Html.ValidationMessage("mailBeschrijving")
+        <strong>Beschrijving</strong>
+        <input type="text" value="@mailInhoud.beschrijving" id="beschrijving" name="mailBeschrijving"/>
+        <input type="submit" value="Wijzigen" />
+    </form>
+</div>

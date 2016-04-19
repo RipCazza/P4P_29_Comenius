@@ -1,0 +1,6 @@
+c:\users\melvi_000\documents\visual studio 2013\Projects\DateChecker3\DateChecker3\bin\Debug\DateChecker3.exe.config
+c:\users\melvi_000\documents\visual studio 2013\Projects\DateChecker3\DateChecker3\bin\Debug\DateChecker3.exe
+c:\users\melvi_000\documents\visual studio 2013\Projects\DateChecker3\DateChecker3\bin\Debug\DateChecker3.pdb
+c:\users\melvi_000\documents\visual studio 2013\Projects\DateChecker3\DateChecker3\obj\Debug\DateChecker3.exe
+c:\users\melvi_000\documents\visual studio 2013\Projects\DateChecker3\DateChecker3\obj\Debug\DateChecker3.pdb
+c:\users\melvi_000\documents\visual studio 2013\Projects\DateChecker3\DateChecker3\obj\Debug\DateChecker3.csprojResolveAssemblyReference.cache

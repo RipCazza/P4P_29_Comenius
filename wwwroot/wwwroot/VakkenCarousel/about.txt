@@ -1,0 +1,3 @@
+DateChecker.exe: Wordt iedere dag uitgevoerd om te kijken of er nog mailtjes verstuurd moeten worden en kijkt of de rooster software moet worden gestart.
+ProfielkeuzeRoosterSoftware.exe: De roostersoftware. Genereert de roosters en verstuurd ze daarna via de mail.
+Driaamolenv9.2: De vakkencarousel website

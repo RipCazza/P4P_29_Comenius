@@ -1,0 +1,154 @@
+﻿@{
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    Layout = "~/Layout/_siteLayout.cshtml";
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "decaan")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                //ingelogd
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }
+    int i = 0;
+    int j = 0;
+    List<string> dagen = new List<string>();
+    List<int> voorlichtingsDagen = new List<int>();
+    string[] alleBlokken = new string[]{"0,1,2,3", "4,5,6,7", "8,9,10,11", "12,13,14,15", "16,17,18,19"};
+    string[] alleDagNamen = new string[]{"Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag"};
+    //haalt alle bestaande talentstromen uit de database
+    var datums = db.Query("SELECT DISTINCT datum FROM voorlichtingen");
+    foreach(var datum in datums)
+    {
+        voorlichtingsDagen.Add(j);
+        j++;
+        string[] datums1 = datum.datum.Split('/');
+        DateTime dateValue = new DateTime(Convert.ToInt32(datums1[2]), Convert.ToInt32(datums1[1]), Convert.ToInt32(datums1[0]));
+        string dag = Convert.ToString(dateValue.DayOfWeek);
+        switch(dag){
+            case "Monday":
+                dagen.Add("Maandag");
+                break;
+            case "Tuesday":
+                dagen.Add("Dinsdag");
+                break;
+            case "Wednesday":
+                dagen.Add("Woensdag");
+                break;
+            case "Thursday":
+                dagen.Add("Donderdag");
+                break;
+            case "Friday":
+                dagen.Add("Vrijdag");
+                break;
+        }
+    }
+    var talentstromen = db.Query("SELECT DISTINCT talentstroom FROM Leerling WHERE talentstroom <> 'Onbekend'");
+    string errormsg = "";
+    string successmsg = "";
+    if(IsPost)
+    {
+        var postedValues = Request.Form.GetValues("postField[]");
+        
+        //voor elke talentstroom wordt de dag hiervan gewijzigd naar de ingevoerde waarden
+        foreach(var talentstroom in talentstromen)
+        {
+            List<int> dagenList = new List<int>();
+            foreach(int dag in voorlichtingsDagen)
+            {
+                dagenList.Add(dag);
+            }
+            if(postedValues[i] != "6")
+            {
+                dagenList.Remove(Convert.ToInt32(postedValues[i]));
+            }
+            string blokken = "";
+            foreach(int dag in dagenList)
+            {
+                if(blokken.Count() == 0)
+                {
+                    blokken += alleBlokken[dag];
+                }
+                else
+                {
+                    blokken += ',' + alleBlokken[dag];
+                }
+            }
+            db.Execute("UPDATE leerling SET blokken = @0 WHERE talentstroom = @1", blokken, talentstroom.talentstroom);
+            i++;
+        }
+        string onbekendBlokken = "";
+        foreach(int dag in voorlichtingsDagen)
+        {
+            if(onbekendBlokken.Count() == 0)
+                {
+                    onbekendBlokken += alleBlokken[dag];
+                }
+                else
+                {
+                    onbekendBlokken += ',' + alleBlokken[dag];
+                }
+        }
+        db.Execute("UPDATE leerling SET blokken = @0 WHERE talentstroom = 'Onbekend'", onbekendBlokken);
+        successmsg = "Dagen van talentstromen succesvol gewijzigd!";
+    }
+}
+
+<div class="card-panel">
+    <form class="col 12" method="post">
+        <a href="~/Decaan">Terug naar vorige pagina</a>
+        <h5 class="header" style="color:#0085BC">Dagen van talentstromen</h5>
+        <div class="card-panel">
+            <p style="color:red">@errormsg</p>
+            <p style="color:green">@successmsg</p>
+            @*maakt voor elke talenstroom een dropdownmenu met de dagen*@
+            @foreach(var talentstroom in talentstromen)
+            {
+                int k = 0;
+                <div class="row">
+                    <p class="col s3">@talentstroom.talentstroom</p>
+                     <select name="postfield[]" class="col s2" required>
+                        @foreach(string dagNaam in alleDagNamen)
+                        {
+                            if(dagen.Contains(dagNaam))
+                            {
+                                <option value= @k>@dagNaam</option>
+                                k++;
+                            }
+                            else
+                            {
+                                <option value="6">@dagNaam</option>
+                            }
+                        }
+                    </select>
+                </div>
+            }
+        </div>
+        <button type="submit" style="z-index: 0" class="waves-effect comeniusblauw btn-large col s12 m6 l3"> Bevestigen </button>
+    </form>
+</div>

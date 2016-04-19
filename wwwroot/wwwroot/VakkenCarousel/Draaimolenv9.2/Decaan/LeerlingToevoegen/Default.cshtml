@@ -1,0 +1,126 @@
+﻿@{Layout = "~/Layout/_siteLayout.cshtml";}
+@{
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+	
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "decaan")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }
+    var id = Request["id"];
+    var leerling = db.QuerySingle("SELECT gebruikerid, voornaam, achternaam, klas, niveau FROM leerling");
+    var voornaam = Request.Form["voornaam"];
+    var achternaam = Request.Form["achternaam"];
+    var klas = Request.Form["klas"];
+    var niveau = Request.Form["niveau"];
+    var email = Request.Form["email"];
+    string errormsg = "";
+    string successmsg = "";
+
+    if(IsPost)
+	{
+        if(decaan.ValidEmail(email, out errormsg) && decaan.ValidNaam(voornaam, achternaam, out errormsg))
+        {
+			Random random = new Random();
+            string rol = "leerling";
+            string password = RandomPass.GeneratePass(12, random);
+            string salt = LoginSLB.App_Code.Login.GetRandomSalt(password.Length);
+            string hashedPass = LoginSLB.App_Code.Login.HashPassword(password, salt);
+            //Maak een nieuwe gebruiker aan
+            db.Execute("INSERT INTO Gebruiker(rol,email,passwordHash,passwordSalt) VALUES(@0,@1,@2,@3)", rol, email, hashedPass, salt);
+            int newId = db.QueryValue("SELECT gebruikerId FROM Gebruiker WHERE email = @0",email);
+            //Voeg wat extra informatie toe in een aparte tabel en maak gebruik van de eerste tabel
+            db.Execute("INSERT INTO Leerling(gebruikerId,voornaam,achternaam,klas,niveau) VALUES(@0,@1,@2,@3,@4)", newId, voornaam, achternaam, klas, niveau);
+            //stuur email naar nieuwe leerling
+            string leftLink = HttpContext.Current.Request.Url.GetLeftPart(UriPartial.Authority);
+            string inhoud = String.Format(Mailtjes.begin + 
+                          @"Er is een account voor je gemaakt voor de vakkencaroussel.
+                            <br>
+							E-mailadres: {0}
+                            <br>
+							Wachtwoord: {1}
+                            Log <a href=" + leftLink + @">hier</a> in.
+                            <br>
+                            Als de bovenstaande link niet werkt:" + leftLink + 
+                            Mailtjes.eind,email,password);
+            Mail mail = new Mail(inhoud);
+            mail.SendMail(email,"Leerling wachtwoord");
+            errormsg = "";
+            successmsg = "Leerling succesvol toegevoegd, er kan ingelogd worden met het toegestuurde wachtwoord.";
+        }
+    }
+    var klassen = db.Query("SELECT DISTINCT Klas FROM Leerling");
+}
+<div class="card-panel">
+    <form class="col 12" method="post">
+        <a href="~/Decaan">Terug naar vorige pagina</a>
+        <h5 class="header" style="color:#0085BC">Leerling toevoegen</h5>
+        <div class="card-panel">
+            <div class="row">
+                <p style="color:red">@errormsg</p>
+                <p style="color:green">@successmsg</p>
+                <div class="input-field col s12 m6">
+                    <input type="text" name="Voornaam" id="voornaam" required>
+                    <label for="voornaam">Voornaam</label>
+                </div>
+                <div class="input-field col s12 m6">
+                    <input type="text" name="Achternaam" id="achternaam" required>
+                    <label for="achternaam">Achternaam</label>
+                </div>
+                <div class="input-field col s12 m6">
+                    <select name="klas" id="klas" required>
+                        @foreach(var gegeven in klassen)
+                        {
+                            <option value="@gegeven.klas">
+                                @gegeven.klas
+                            </option>
+                        }
+                    </select>
+                    <label for="klas">Klas</label>
+                </div>
+                <div class="input-field col s12 m6">
+                    <select name="niveau" id="niveau" required>
+                        <option value="ha3">ha3</option>
+                        <option value="ath3">ha4</option>
+                        <option value="ath3">ath3</option>
+                        <option value="ath3">ath4</option>
+                    </select>
+                    <label for="niveau">Niveau</label>
+                </div>
+                <div class="input-field col s12 m6">
+                    <input type="text" name="email" id="email" required>
+                    <label for="email">E-mailadres</label>
+                </div>
+            </div>
+        </div>
+        <button type="submit" style="z-index: 0" class="waves-effect comeniusblauw btn-large col s12 m6 l3">Toevoegen</button>
+    </form>
+</div>

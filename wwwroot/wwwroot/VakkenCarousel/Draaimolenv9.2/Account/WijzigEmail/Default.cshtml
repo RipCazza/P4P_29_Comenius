@@ -1,0 +1,88 @@
+﻿@{
+    var accountId = 0;
+    Database db = Database.Open("Draaimolen");
+    Layout="~/Layout/_siteLayout.cshtml";
+    if (Request.Cookies["accountId"] != null && Request.Cookies["hash"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            //Als de hash ongeldig is word je uitgelogd
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            //De rol wordt aangevraagd en je sessie wordt verlengd
+            Response.Cookies["accountId"].Value = accountId.ToString();
+            Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+            Response.Cookies["hash"].Value = hash;
+            Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+        }
+    }
+    else
+    {
+        //Doorverwijzen als je niet ingelogd bent
+        Response.Redirect("~/");
+    }    
+    string errormsg = "";
+    var oudemail = db.QueryValue("SELECT eigenemail FROM Gebruiker WHERE gebruikerid = @0", accountId);
+    if(IsPost)
+    {
+        var nieuwemail = Request.Form["nieuwemail"];
+        var bevestigNieuwemail = Request.Form["bevestigNieuwemail"];
+        if(nieuwemail == bevestigNieuwemail)
+        {
+            if(decaan.ValidEmail(nieuwemail, out errormsg))
+            {
+                var toevoegen = db.Execute("UPDATE Gebruiker SET eigenemail = @0 WHERE gebruikerid = @1", nieuwemail, accountId);
+                Response.Redirect("~/Account/WijzigEmail?a=succes"); 
+            }
+        }
+        else
+        {
+            errormsg = "Invoer komt niet overeen.";
+        }    
+    }
+}
+
+<div class="card-panel">
+    @{var a = Request.Params["a"];}
+    @if(a == "succes")
+    {
+        <p style="color:green">Je email is toegevoegd! Klik <a href="~/Redirect">hier</a> om terug te gaan.</p>
+    }
+    else
+    {
+    <h5 style="color:#0085bc">Eigen e-mailadres toevoegen</h5>
+    <p>Hier kun je jouw eigen e-mailadres toevoegen. Hierdoor krijg je alle mailtjes niet alleen op je schoolmail, maar ook op je eigen e-mailadres! <b>Let op:</b> dit is niet het e-mailadres waarmee je inlogt!</p>
+    <div class="row">
+        <br></br>
+        <p style="color: red"> @errormsg</p>
+        <br></br>
+        <form class="col s12" method="post">
+            <div class="row">
+                <div class="input-field col s12 m6 l12">
+                    <input name="nieuwemail" type="text" value="@oudemail" id="nieuwemail">
+                    <label for="nieuwemail">Nieuw e-mailadres</label>
+                </div>
+            </div>
+            <div class="row">
+                <div class="input-field col s12 m6 l12">
+                    <input name="bevestigNieuwemail" type="text" value="@oudemail" id="bevestigNieuwemail">
+                    <label for="bevestigNieuwemail">Bevestig nieuw e-mailadres</label>
+                </div>
+            </div>
+            <div class="row">
+                <button style="z-index:0" type="submit" class="waves-effect comeniusblauw btn-large col s12 m6 l3">
+                    Voeg email toe
+                </button>
+            </div>
+        </form>
+    </div>
+    }
+</div>

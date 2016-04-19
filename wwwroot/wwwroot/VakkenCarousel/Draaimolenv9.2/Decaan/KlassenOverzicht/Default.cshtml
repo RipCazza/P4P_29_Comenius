@@ -1,0 +1,104 @@
+﻿@{  
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    Layout = "~/Layout/_siteLayout.cshtml";
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "decaan")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                //ingelogd
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }
+    //Select alle klassen
+    var klassen = db.Query("SELECT klas FROM leerling GROUP BY klas");    
+}
+
+<div class="card-panel">
+    <a href="~/Decaan">Terug naar vorige pagina</a>
+    <br> @*Een beetje ruimte creëren*@
+    <div style="padding:10px" class="z-depth-1">
+        <form class="col 12" method="post"> 
+            <h5 class="header" style="color:#0085BC">Bekijk alle leerlingen per klas</h5>
+            <div class="row">
+                <div class="input-field col s12 m6">
+                    <select name="selectklas">
+                        @* Select een dropdownlist van alle klassen *@
+                        @foreach(var klas in klassen)
+                        {
+                            <option value="@klas.klas">@klas.klas</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <button style="z-index:0" type="submit" class="waves-effect comeniusblauw btn-large col s12 m6 l3">
+                Bekijk klas
+            </button>
+        </form>
+    </div>
+    @if(IsPost)
+    {
+        //Haalt op welke klas is gekozen
+        var klas = Request.Form["selectklas"];     
+        //Haalt alle leerlingen op die bij de gekozen klas horen. 
+        var leerlinglijst = db.Query("SELECT voornaam, achternaam, gebruikerId FROM leerling WHERE klas = @0 ORDER BY achternaam", klas);
+        <br></br>
+        <p style="text-align:center"><b>Klas:</b> @klas</p>
+        <table class="responsive-table hoverable centered z-depth-1">
+            <thead>
+                <tr>
+                    <th>Voornaam</th>
+                    <th>Achternaam</th>
+                    <th>Ingescheven?</th>
+                </tr>
+            </thead>
+            <tbody>
+
+                @foreach(var leerling in leerlinglijst){
+                <tr style="cursor:pointer" onclick="window.location='/Rooster?id=@leerling.gebruikerId'">
+                    <td>@leerling.voornaam</td>
+                    <td>@leerling.achternaam</td>
+                    @{
+                        var leerlings = leerling.gebruikerID;
+                        //Kijkt of de leerlingen een keuze heeft gemaakt. 
+                        var ingeschrevenleerling = db.QueryValue("SELECT gebruikerID FROM Keuze WHERE Keuze.gebruikerId = @0", leerlings);
+                        if(ingeschrevenleerling == null)
+                        {
+                            <td style="background-color:#ffeeee">Nee</td>
+                        }
+                        else
+                        {
+                            <td>Ja</td>
+                        }
+                    }
+                </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>

@@ -1,0 +1,57 @@
+﻿@{
+    var accountId = 0;
+    Database db = Database.Open("Draaimolen");
+    if (Request.Cookies["accountId"] != null && Request.Cookies["hash"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            //Als de hash ongeldig is word je uitgelogd
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/?a=uitloggen");
+        }
+        else
+        {
+            //De rol wordt aangevraagd en je sessie wordt verlengd
+            Response.Cookies["accountId"].Value = accountId.ToString();
+            Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+            Response.Cookies["hash"].Value = hash;
+            Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+
+            var rol = db.QueryValue(Queries.rolId,accountId);
+            if(rol == "leerling")
+            {
+                Response.Redirect("~/Leerling");
+            }
+            else if(rol == "leraar")
+            {
+                Response.Redirect("~/Leraar");
+            }
+            else if(rol == "leraar")
+            {
+                Response.Redirect("~/Leraar");
+            }
+            else if(rol == "decaan")
+            {
+                Response.Redirect("~/Decaan");
+            }
+            else if(rol == "mentor")
+            {
+                Response.Redirect("~/Mentor");
+            }
+            else
+            {
+                Response.Redirect("~/?a=uitloggen");
+            }
+        }
+    }
+    else
+    {
+        //Doorverwijzen als je niet ingelogd bent
+        Response.Redirect("~/?a=uitloggen");
+    }
+}

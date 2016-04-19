@@ -1,0 +1,89 @@
+﻿@{ 
+    Layout = "~/Layout/_siteLayoutNoNavbar.cshtml";
+    string successmsg = "";
+    if(IsPost)
+    {
+        //als het een geldige email is
+        var email = Request["sendTo"];
+        if(email.Contains('@') && email.Contains('.'))
+        {
+            Database db = Database.Open("Draaimolen");
+            //als het e-mailadres een gebruiker is 
+            var amount = db.QueryValue("SELECT COUNT(email) FROM Gebruiker WHERE email = @0",email);
+            if (amount == 1)
+            {
+                //check of het al langer dan een uur geleden is
+                string lastChange = Convert.ToString(db.QueryValue("SELECT lastPassReset FROM Gebruiker WHERE email = @0", email));
+                DateTime datum;
+                bool isDateTime = DateTime.TryParse(lastChange, out datum);
+                bool hourAgo = false;
+                if (isDateTime)
+                {
+                    hourAgo = (DateTime.Now - datum).TotalHours > 1;
+                }
+                if (lastChange == ""|| hourAgo)
+                {
+                    //stuur bevestigingsmail op
+                    string confirmCode = Guid.NewGuid().ToString();
+                    DateTime validTill = DateTime.Now.AddDays(1);
+                    db.Execute("UPDATE Gebruiker SET confirmationToken=@0,tokenValidTill=@1 WHERE email = @2",confirmCode,validTill,email);
+                    var userId = db.QueryValue("SELECT GebruikerId FROM Gebruiker WHERE email = @0",email);
+                    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    //doordat de domeinnaam doorverwijst naar de root van de map op de server, zal de onderstaande link niet werken.
+                    //Link de domeinnaam naar het mapje van de website en de link zal werken.
+                    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    string confirmationUrl = HttpContext.Current.Request.Url.GetLeftPart(UriPartial.Authority) + "/Account/BevestigWachtwoord?ConfirmationToken="+ confirmCode + "&UserId="+ userId;
+                    string inhoud = Mailtjes.begin +
+                                  @"Er is onlangs een verzoek gestuurd om je wachtwoord te resetten. Als je dit verzoek accepteert, sturen we je een nieuw gegenereerd wachtwoord.
+                                    <br>
+                                    Klik <a href="+confirmationUrl + @">hier</a> om je wachtwoordreset te bevestigen.
+                                    <br>
+                                    Deze link is geldig t/m " + validTill + @".
+                                    <br>
+                                    Als het bovenstaande niet werkt, plak deze link in je browser:
+                                    " + confirmationUrl
+                                  + Mailtjes.eind;
+                    Mail mail = new Mail(inhoud);
+                    if (mail.SendMail(email, "Wachtwoordreset"))
+                    {
+                        successmsg = "Er is een bevestigingsmail gestuurd.";
+                    }
+                }
+                else
+                {
+                    ModelState.AddError("email","Je mag maximaal 1 keer per uur je wachtwoord resetten.");    
+                }
+            }
+            else
+            {
+                ModelState.AddError("email","Je e-mailadres is onjuist.");
+            }
+        }
+        else
+        {
+            ModelState.AddError("email","Voer alstublieft een geldig e-mailadres in.");
+        }
+    }
+}
+<div class="card-panel">
+    <a href="~/">Klik hier om terug te gaan</a>
+    <p style="color:green">@successmsg</p>
+    <h5 style="color: #0085bc">Wachtwoord Vergeten</h5>
+    <form method="post">
+        <p style="color: red;">@Html.ValidationMessage("email")</p>
+        <div class="row">
+            <div class="input-field col s12">
+                <input type="email" id="email" name="sendTo">
+                <label for="email">E-mailadres</label>
+            </div>
+        </div>
+        <div class="row">
+            <div class="input-field col s12">
+                <button type="submit" class="btn comeniusblauw waves-effect s12 m6 l3">
+                    Reset wachtwoord
+                    <i class="mdi-content-send right"></i>
+                </button>
+            </div>
+        </div>
+    </form>
+</div>

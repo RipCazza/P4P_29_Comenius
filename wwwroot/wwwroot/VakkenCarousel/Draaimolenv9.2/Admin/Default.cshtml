@@ -1,0 +1,289 @@
+﻿@using System.Xml;
+@{
+    Layout = "~/Layout/_siteLayout.cshtml";
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    if (Request.Cookies["accountId"] != null && Request.Cookies["hash"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if (rol != "admin")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }
+    if (IsPost)
+    {
+        //try
+        //{
+        if (Request.Files.Count > 0)
+        {
+            var uploadedFile = Request.Files[0];
+            //kijk of de extensie .xml is of .csv
+            string extension = System.IO.Path.GetExtension(uploadedFile.FileName);
+            if (Request.Form["LeerlingBtn"] != null)
+            {
+                //\"" gebruikt om "te escapen, helaas komt dit ook in de urls en href= enz te staan
+                //root link er nog bij?
+                string leftLink = HttpContext.Current.Request.Url.GetLeftPart(UriPartial.Authority);
+                string accountMail = Mailtjes.begin + 
+                                  @"Beste <strong>{0} {1}</strong>,
+                                    <br>
+                                    <br>
+                                    Dit zijn je inloggegevens:
+                                    <br>
+                                    E-mailadres: {2}
+                                    <br>
+                                    Wachtwoord: {3}
+                                    <br>
+                                     Log <a href=" + leftLink + @">hier</a> in om je keuze te maken voor de vakkencaroussel.
+                                    <br>
+                                    Als de bovenstaande link niet werkt:" + leftLink + 
+                                    Mailtjes.eind;
+                string leerlingEmailInhoud = Mailtjes.begin + db.QueryValue("SELECT inhoud FROM Mails WHERE MailId = 4") + Mailtjes.eind;
+                string leerlingEmailOnderwerp = db.QueryValue("SELECT onderwerp FROM Mails WHERE MailId = 4");
+                string oudersEmailInhoud = Mailtjes.begin + db.QueryValue("SELECT inhoud FROM Mails WHERE MailId = 3") + Mailtjes.eind;
+                string oudersEmailOnderwerp = db.QueryValue("SELECT onderwerp FROM Mails WHERE MailId = 3");
+                //Importeer alle leerlingen
+                if (extension.ToLower() == ".xml")
+                {
+                    //als het xml is
+                    XmlDocument XMLImport = new XmlDocument();
+                    XMLImport.Load(uploadedFile.InputStream);
+                    XmlDocument strippedXML = XMLUpload.StripNamespace(XMLImport);
+                    //strip de namespaces eruit, zodat je selectnodes normaal kan gebruiken
+                    XmlNodeList leerlingen = strippedXML.SelectNodes("/Workbook/Worksheet/Table/Row");
+                    //verwijder alle oude tabellen met oude gegevens
+                    //verwijder alle carousellen
+                    db.Execute("DELETE FROM carousel");
+                    //verwijder alle keuzes
+                    db.Execute("DELETE FROM Keuze");
+                    //verwijder alle gebruikers met de rol leerling
+                    db.Execute("DELETE FROM Gebruiker WHERE rol='leerling'");
+                    //Verwijder alle leerlingen
+                    db.Execute("DELETE FROM Leerling");
+                    //check of de eerste rij de kolomnamen bevat
+                    bool kolomnamen = leerlingen[0].SelectNodes("Cell/Data")[0].InnerText == "Stamnr";
+                    Random random = new Random();
+                    foreach (XmlNode leerling in leerlingen)
+                    {
+                        //als de eerste rij kolomnamen bevat, sla dan de eerste rij over.
+                        if (kolomnamen)
+                        {
+                            kolomnamen = false;
+                            continue;
+                        }
+                        //stamnr = 0 roepnaam = 1  achternaam = 2 email = 3 emailouders = 4 klas = 5 studie = 6 talentstroom = 7
+                        List<string> alleGegevens = new List<string>();
+                        XmlNodeList gegevens = leerling.SelectNodes("Cell/Data");
+                        foreach (XmlNode gegeven in gegevens)
+                        {
+                            alleGegevens.Add(gegeven.InnerText);
+                        }
+                        //rol,email,password,passwordHash,passwordSalt
+                        string password = RandomPass.GeneratePass(12, random);
+                        string salt = LoginSLB.App_Code.Login.GetRandomSalt(password.Length);
+                        string hashedPass = LoginSLB.App_Code.Login.HashPassword(password, salt);
+                        db.Execute("INSERT INTO Gebruiker(rol,email,passwordHash,passwordSalt) VALUES(@0,@1,@2,@3)", "leerling", alleGegevens[3], hashedPass, salt);
+                        var gebruikerId = db.QueryValue("SELECT MAX(gebruikerId) FROM Gebruiker");
+                        db.Execute("INSERT INTO Leerling(gebruikerId,voornaam,achternaam,klas,niveau,talentstroom,leerlingnummer,instroomleerling, oudersemail) VALUES (@0, @1, @2, @3, @4, @5, @6, @7,@8)", gebruikerId, alleGegevens[1], alleGegevens[2], alleGegevens[5], alleGegevens[6], alleGegevens[7], alleGegevens[0], false, alleGegevens[4]);
+                        Mail leerlingMail = new Mail(leerlingEmailInhoud);
+                        leerlingMail.SendMail(alleGegevens[3], leerlingEmailOnderwerp);
+                        //stuur het mailtje met wachtwoord enz. op naar de leerling
+                        //mail voor de leerling
+                        string accountMailXML = String.Format(accountMail, alleGegevens[1], alleGegevens[2], alleGegevens[3], password);
+                        //uitgecomment houden, zodat je niet per ongeluk mailtjes verstuurd
+                        Mail accMail = new Mail(accountMailXML);
+                        accMail.SendMail(alleGegevens[3], "Account profielkeuze");
+                        //stuur een mail naar de ouders
+                        Mail oudersMail = new Mail(oudersEmailInhoud);
+                        oudersMail.SendMail(alleGegevens[4], oudersEmailOnderwerp);
+                    }
+                    <script type="text/javascript">
+                        alert('Leerlingen succesvol geïmporteerd vanuit het xml bestand!');
+                    </script>
+                }
+                //als het csv is
+                else if (extension.ToLower() == ".csv")
+                {
+                    System.IO.StreamReader streamreader = new StreamReader(uploadedFile.InputStream);
+                    string line = streamreader.ReadLine();
+                    bool cont = true;
+                    Random random = new Random();
+                    //verwijder alle oude tabellen met oude gegevens
+                    //verwijder alle carousellen
+                    db.Execute("DELETE FROM carousel");
+                    //verwijder alle keuzes
+                    db.Execute("DELETE FROM Keuze");
+                    //verwijder alle gebruikers met de rol leerling
+                    db.Execute("DELETE FROM Gebruiker WHERE rol='leerling'");
+                    //Verwijder alle leerlingen
+                    db.Execute("DELETE FROM Leerling");
+                    while (line != null)
+                    {
+                        //Sla de eerste lijn over, omdat deze alleen maar
+                        if (cont)
+                        {
+                            cont = false;
+                            line = streamreader.ReadLine();
+                            continue;
+                        }
+                        //stamnr = 0 roepnaam = 1  achternaam = 2 email = 3 emailouders = 4 klas = 5 studie = 6 talentstroom = 7
+                        string[] alleGegevens = line.Split(';');
+                        string password = RandomPass.GeneratePass(12, random);
+                        string salt = LoginSLB.App_Code.Login.GetRandomSalt(password.Length);
+                        string hashedPass = LoginSLB.App_Code.Login.HashPassword(password, salt);
+                        db.Execute("INSERT INTO Gebruiker(rol,email,passwordHash,passwordSalt) VALUES(@0,@1,@2,@3)", "leerling", alleGegevens[3], hashedPass, salt);
+                        var gebruikerId = db.QueryValue("SELECT MAX(gebruikerId) FROM Gebruiker");
+                        db.Execute("INSERT INTO Leerling(gebruikerId,voornaam,achternaam,klas,niveau,talentstroom,leerlingnummer,instroomleerling, oudersemail) VALUES (@0, @1, @2, @3, @4, @5, @6, @7,@8)", gebruikerId, alleGegevens[1], alleGegevens[2], alleGegevens[5], alleGegevens[6], alleGegevens[7], alleGegevens[0], false, alleGegevens[4]);
+                        //db.Execute("INSERT INTO Gebruiker(rol,email,passwordHash,passwordSalt) VALUES(@0,@1,@2,@3)", "leerling", alleGegevens[3], hashedPass, salt);
+                        //var gebruikerId = db.QueryValue("SELECT MAX(gebruikerId) FROM Gebruiker");
+                        //db.Execute("INSERT INTO Leerling(gebruikerId,voornaam,achternaam,klas,niveau,talentstroom,leerlingnummer,instroomleerling) VALUES (@0, @1, @2, @3, @4, @5, @6, @7)", gebruikerId, alleGegevens[1], alleGegevens[2], alleGegevens[4], alleGegevens[5], alleGegevens[6], alleGegevens[0], false);
+                        //stuur het mailtje met wachtwoord enz. op naar de leerling
+                        string accountMailCSV = String.Format(accountMail, alleGegevens[1], alleGegevens[2], alleGegevens[3], password);
+                        //uitgecomment houden, zodat je niet per ongeluk mailtjes verstuurd
+                        Mail leerlingMail = new Mail(leerlingEmailInhoud);
+                        leerlingMail.SendMail(alleGegevens[3], leerlingEmailOnderwerp);
+                        //stuur het mailtje met wachtwoord enz. op naar de leerling
+                        //mail voor de leerling
+                        //uitgecomment houden, zodat je niet per ongeluk mailtjes verstuurd
+                        Mail accMail = new Mail(accountMailCSV);
+                        accMail.SendMail(alleGegevens[3], "Account profielkeuze");
+                        //stuur een mail naar de ouders
+                        Mail oudersMail = new Mail(oudersEmailInhoud);
+                        oudersMail.SendMail(alleGegevens[4], oudersEmailOnderwerp);
+                        line = streamreader.ReadLine();
+                    }
+                    <script type="text/javascript">
+                        alert('Leerlingen succesvol geïmporteerd vanuit het csv bestand!');
+                    </script>
+                }
+            }
+            @*else if (Request.Form["InstroomBtn"] != null)
+            {
+                //bedenk iets hoe we deze gegevens kunnen benuttigen
+                if (extension.ToLower() == ".xml")
+                {
+                    //importeer alle instroomleerlingen
+                    XmlDocument XMLImport = new XmlDocument();
+                    XMLImport.Load(uploadedFile.InputStream);
+                    XmlNodeList alleLeerlingen = XMLImport.SelectNodes("/CACHE/LINES/LINE");
+                    foreach (XmlNode leerling in alleLeerlingen)
+                    {
+                        List<string> alleGegevens = new List<string>();
+                        //gegevens van 1 leerling ipv alle gegevens
+                        XmlNodeList gegevens = leerling.SelectNodes("CELL");
+                        foreach (XmlNode gegeven in gegevens)
+                        {
+                            alleGegevens.Add(gegeven.InnerText);
+                        }
+                        //rol,email,password,passwordHash,passwordSalt
+                        /*
+                        string password = RandomPass.GeneratePass(12);
+                        string salt = LoginSLB.App_Code.Login.GetRandomSalt(password.Length);
+                        string hashedPass = LoginSLB.App_Code.Login.HashPassword(password, salt);
+                        db.Execute("INSERT INTO Gebruiker(rol,email,passwordHash,passwordSalt) VALUES(@0,@1,@2,@3)", "leerling", alleGegevens[3], hashedPass, salt);
+                        var gebruikerId = db.QueryValue("SELECT MAX(gebruikerId) FROM Gebruiker");
+                        */
+                        //instromers hebben meestal geen email en klas
+                        //db.Execute("INSERT INTO Leerling(gebruikerId,voornaam,achternaam,klas,niveau,talentstroom,leerlingnummer,instroomleerling) VALUES (@0, @1, @2, @3, @4, @5, @6, @7)", gebruikerId, alleGegevens[1], alleGegevens[2], alleGegevens[4], alleGegevens[5], alleGegevens[6], alleGegevens[0],true);
+                        //stuur het mailtje met wachtwoord enz. op naar de leerling
+                    }
+                    //als de instroomleerlingen succesvol geïmporteerd zijn
+                    <script type="text/javascript">
+                        alert('Instroomleerlingen succesvol geïmporteerd!');
+                    </script>
+                }
+                else if (extension.ToLower() == ".csv")
+                {
+                    <script type="text/javascript">
+                        alert('Leerlingen succesvol geïmporteerd!');
+                    </script>
+                }
+            }*@
+        }
+        else
+        {
+            <script type="text/javascript">
+                alert('Er is geen bestand geselecteerd.');
+            </script>
+        }
+        //}
+        //catch (Exception e)
+        //{
+        //                <script type="text/javascript">
+        //                    alert('Er ging iets fout bij het importeren van het XML bestand:\n @e.Message');
+        //                </script>
+        //}
+    }
+}
+@*Deze code staat er omdat de FileUpload web helper wel een name propertie heeft, maar deze alleen maar geld voor de file dialog button*@
+<script type="text/javascript">
+    $(document).ready(function () {
+        $('#LeerlingUpload :submit').attr('name', 'LeerlingBtn');
+        //$('#InstroomLUpload :submit').attr('name', 'InstroomBtn');
+    });
+</script>
+<div class="card-panel">
+    <h5 style="color:#0085bc">Management voor de admin</h5>
+    <ul class="collapsible" data-collapsible="accordion">
+        <li>
+            <div class="collapsible-header"><i class="mdi-social-person"></i>Decaan</div>
+            <div class="collapsible-body">
+                <p style="display:inline-block"><a href="~/Admin/DecaanToevoegen">Toevoegen</a></p>
+				<p style="display:inline-block"><a href="~/Admin/DecaanVerwijderen">Verwijderen</a></p>
+            </div>
+        </li>
+    </ul>
+    @*Accordion inschakelen*@
+    <script>
+        $(document).ready(function(){
+            $('.collapsible').collapsible({
+                accordion : true // A setting that changes the collapsible behavior to expandable instead of the default accordion style
+            });
+        });
+    </script>
+    <h5 style="color:#0085bc">Uploadpagina</h5>
+    <p>Upload je bestanden hier in in xml of csv formaat</p>
+    <p>De inhoud van het bestand moet in de volgende volgorde staan: <br/>stamnr = 0 roepnaam = 1  achternaam = 2 email = 3 emailouders = 4 <br/>klas = 5 studie = 6 talentstroom = 7
+    <div class="z-depth-1" style="padding:10px" id="LeerlingUpload">
+        <strong>Upload hier alle leerlingen</strong>
+        @FileUpload.GetHtml(
+            initialNumberOfFiles: 1,
+            allowMoreFilesToBeAdded: false,
+            includeFormTag: true,
+            uploadText: "Upload")
+    </div>
+    @*<br />
+    <div class="z-depth-1" style="padding:10px" id="InstroomLUpload">
+        <strong>Upload hier alle instroomleerlingen</strong>
+        @FileUpload.GetHtml(
+            initialNumberOfFiles: 1,
+            allowMoreFilesToBeAdded: false,
+            includeFormTag: true,
+            uploadText: "Upload")
+    </div>*@
+</div>

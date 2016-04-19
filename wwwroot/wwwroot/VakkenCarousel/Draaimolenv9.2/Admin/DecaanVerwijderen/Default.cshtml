@@ -1,0 +1,90 @@
+﻿@{
+    Layout = "~/Layout/_siteLayout.cshtml";
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    if (Request.Cookies["accountId"] != null && Request.Cookies["hash"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if (rol != "admin")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }
+    
+    string errormsg = "";
+
+    if(IsPost)
+    {
+        var email = Request.Form["email"];
+        if(decaan.ValidEmail(email, out errormsg))
+        {
+            db.Execute("DELETE FROM Gebruiker WHERE email = @0", email);
+        }
+    }
+}
+<div class="card-panel">
+    @*Terug*@
+    <a href="~/Admin">Klik hier om terug te gaan</a>
+    @*Decaan verwijderen*@
+    <div class="card-panel">
+        <form class="col s12" method="post"> 
+            <h5 class="header" style="color:#0085BC">Decaan Verwijderen</h5>
+            <div class="card-panel">
+                <div class="row">
+                    <p style="color:red">@errormsg</p>
+                    <div class="input-field col s12 m6">
+                        <input type="email" name="email" id="email" required>
+                        <label for="email">E-mailadres</label>
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="waves-effect comeniusblauw btn-large col s12 m6 l3">Verwijderen</button>
+        </form>
+    </div>
+    @*Decaanlijst*@
+    <div class="card-panel">
+        <h5 style="color:#0085bc">Decaanlijst</h5>
+        <table class="responsive-table hoverable">
+            <thead>
+                <tr>
+                    <th>E-mailadres</th>
+                </tr>
+            </thead>
+            <tbody>
+                @{
+                    var decaanQuery = db.Query("SELECT email FROM Gebruiker WHERE rol = 'decaan'");
+                    foreach(var decaan in decaanQuery)
+                    {
+                        <tr>
+                            <td>@decaan.email</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

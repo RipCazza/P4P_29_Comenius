@@ -1,0 +1,103 @@
+﻿@{
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    Layout = "~/Layout/_siteLayout.cshtml";
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "decaan")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                //ingelogd
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }
+
+    var lokaal = Request.Form["lokaal"];
+    var maxPersonen = Request.Form["maxPersonen"];
+    var vakId = Request.Form["vakid"];
+    string errormsg = "";
+    string successmsg = "";
+    var lokalen = db.Query("SELECT lokaal, maxPersonen, vak, niveau FROM Lokalen");
+    if(IsPost)
+    {
+        //controleert of alle ingevulde waarden de juiste layout hebben
+        if(decaan.ValidLokaal(lokaal, out errormsg) && decaan.ValidRuimte(maxPersonen, out errormsg))
+        {
+            //controleert of er eerder al een lokaal is aangegeven
+            var wijziglokaal = db.QueryValue("SELECT lokaal FROM Lokalen WHERE lokaal = @0", lokaal);
+            if(wijziglokaal == null)
+            {
+                //voegt het ingevoerde lokaal en het maximaal aantal personen toe aan de database
+                var toevoegen = db.Execute("INSERT INTO Lokalen VALUES (@0, @1, @2)", lokaal, maxPersonen, vakId);
+                successmsg = "Lokaal succesvol toegevoegd";
+            }
+            else
+            {
+                //wijzigt het maximaal aantal personen dat past in het aangegeven lokaal
+                var wijzigen = db.Execute("UPDATE lokalen SET maxPersonen = @0, vak = @2 WHERE lokaal = @1", maxPersonen, lokaal, vakId);
+                successmsg = "Lokaal succesvol gewijzigd";
+            }
+        }
+    }    
+}
+
+<div class="card-panel">
+    <form class="col 12" method="post"> 
+        <a href="~/Decaan">Terug naar vorige pagina</a>
+        <h5 class="header" style="color:#0085BC">Lokalen toevoegen</h5>
+        <div class="card-panel">
+            <div class="row">
+                <p style="color:red">@errormsg</p>
+                <p style="color:green">@successmsg</p>
+                <div class="input-field col s12 m6">
+                    <input type="text" name="lokaal" placeholder="000">
+                    <label for="lokaal">Lokaal</label>
+                </div>
+                <div class="input-field col s12 m6">
+                    <input type="text" name="maxPersonen" placeholder="00">
+                    <label for="maxPersonen">Maximaal aantal personen</label>
+                </div>
+                <button type="submit" style="z-index: 0" class="waves-effect comeniusblauw btn-large col s12 m6 l3">Toevoegen of aanpassen</button>
+            </div>
+        </div>
+    </form>
+    <h5 class="header" style="color:#0085BC">Lokalen Overzicht</h5>
+    <table class="responsive-table hoverable centered">
+        <thead><tr><th>Lokaal</th><th>Max Personen</th><th>Vaknaam</th><th>Niveau</th></tr></thead>
+        <tbody>
+            @foreach(var l in lokalen)
+            {
+                <tr>
+                    <td>@l.lokaal</td>
+                    <td>@l.maxPersonen</td>
+                    <td>@l.vak</td>
+                    <td>@l.niveau</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

@@ -1,0 +1,80 @@
+﻿@{
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    Layout = "~/Layout/_siteLayout.cshtml";
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "decaan")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                //ingelogd
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }   
+    var VasteEmails = db.Query("SELECT * FROM Mails WHERE MailId <= 4");
+    var ToegevoegdeEmails = db.Query("SELECT * FROM Mails WHERE MailId > 4");
+}
+
+<div class="card-panel">
+    <h1>Mailoverzicht</h1>
+    <p>Klik op het onderwerp van een e-mail om deze te wijzigen</p>
+    <!--Vaste emails hier-->
+    <h3>E-mails die standaard worden gebruikt</h3>
+    <table class="responsive-table">
+        <tr>
+            <td>Onderwerp</td><td>Naar</td><td>Beschrijving</td>
+        </tr>
+        @foreach(var email in VasteEmails){
+            <tr>
+                <td><a href="~/Decaan/MailsAanpassen?MailId=@email.mailId">@email.onderwerp</a></td><td>@email.rol</td><td>@email.beschrijving</td>
+            </tr>
+        }
+    </table>
+    <br>
+    <!--Toegevoegde emails hier-->
+    <h3>E-mails die zijn toegevoegd</h3>
+    <table class="responsive-table">
+        <tr>
+            <td>Onderwerp</td><td>Beschrijving</td><td>Naar</td><td>Verzenddatum</td>
+        </tr>
+        @foreach(var email in ToegevoegdeEmails){
+            <tr>
+                <td><a href="~/Decaan/MailsAanpassen?MailId=@email.mailId">@email.onderwerp</a></td><td>@email.beschrijving</td>
+                @if(email.rol != null ){
+                    <td>@email.rol</td>
+                }
+                else if(email.emailNaar != null){
+                    <td>@email.emailNaar</td>
+                }
+                else{
+                    <td></td>
+                }
+                <td>@email.verzendDatum</td><td><a href="~/Decaan/VerwijderEmail?mailId=@email.mailId">Verwijder</a></td>
+            </tr>
+        }
+    </table>
+</div>

@@ -1,0 +1,171 @@
+﻿@{
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    Layout = "~/Layout/_siteLayout.cshtml";
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "decaan")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                //ingelogd
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }  
+    //valideer
+    Validation.Add("onderwerp",Validator.StringLength(199,0,"Het onderwerp moet tussen de 0 en de 200 karakters lang zijn."));
+    Validation.Add("beschrijving",Validator.StringLength(249,0,"De beschrijving mag maximaal 250 karakters lang zijn."));
+    Validation.Add("enkelEmail",Validator.StringLength(254,4,"Het emailadres moet tussen de 4 en de 254 karakters lang zijn.")); 
+    if(IsPost && Validation.IsValid()){
+        string onderwerp = "";
+        string inhoud = "";
+        onderwerp = Request.Form["mailOnderwerp"];
+        inhoud = Request.Form["mailInhoud"];
+
+        //als 1 persoon is gecheckt, doe dan voor 1 persoon en anders kijk dan naar de rollen
+        bool onePersonChecked = false;
+        Boolean.TryParse(Request["EnkelCheck"], out onePersonChecked);
+        if(onePersonChecked){
+            var enkelEmail = Request.Form["enkelEmail"];
+        }
+        else{
+            //kijk naar welke rollen er geselecteerd zijn
+            foreach (var rol in Request.Form.GetValues("checkboxGroupSelect"))
+            {
+                <p>@rol</p>
+            }
+        }
+        //voeg de mail toe of verzend de mail
+
+        //als toegevoegd, haal dan beschrijving op
+    }
+}
+
+<div class="card-panel">
+    <h1>Mail verzenden of toevoegen</h1>
+    <p>Deze mail verzenden naar:</p>
+    <form method="post">
+        <input type="checkbox" class="filled-in" id="EnkelCheck"/>
+          <label for="EnkelCheck">Èèn emailadres, namelijk:</label>
+        <br/>
+        <input type="email" placeholder="Email" name="enkelEmail" id="enkelEmail"/>
+        <br/>
+            <div id="meerdereMensen">
+                <input type="checkbox" class="filled-in" id="IedereenCheck"/>
+                  <label for="IedereenCheck">Iedereen</label>
+                <br/>
+                <div id="SelectGroup">
+                    <input type="checkbox" class="filled-in" id="leerlingCheck" name="checkboxGroupSelect"/>
+                      <label for="leerlingCheck">Leerlingen</label>
+                    <br/>
+                    <input type="checkbox" class="filled-in" id="oudersCheck" name="checkboxGroupSelect" />
+                      <label for="oudersCheck">Ouders van leerlingen</label>
+                    <br/>
+                    <input type="checkbox" class="filled-in" id="leraarCheck" name="checkboxGroupSelect" />
+                      <label for="leraarCheck">Leraren</label>
+                    <br/>
+                    <input type="checkbox" class="filled-in" id="mentorCheck" name="checkboxGroupSelect" />
+                      <label for="mentorCheck">Mentoren</label>
+                    <br/>
+                    <input type="checkbox" class="filled-in" id="decanenCheck" name="checkboxGroupSelect" />
+                      <label for="decanenCheck">Decanen</label>
+                    <br/>
+                    <input type="checkbox" class="filled-in" id="AdminCheck" name="checkboxGroupSelect" />
+                      <label for="AdminCheck">Admin</label>
+                </div>
+            </div>
+        <br/>
+        @Html.ValidationMessage("mailOnderwerp")
+        <strong>Onderwerp</strong>
+        <input type="text" placeholder="Onderwerp" id="onderwerp" name="mailOnderwerp"/>
+        <br/>
+        <strong>Inhoud</strong>
+        <textarea name="mailInhoud" rows="30"></textarea>
+        <br/>
+        <br/>
+        <strong>Verzenden</strong>
+        <br/>
+        <input type="checkbox" class="filled-in" id="meteenVerzenden"/>
+                      <label for="meteenVerzenden">Nu meteen</label>
+        <br/>
+        <input type="checkbox" class="filled-in" id="laterVerzenden"/>
+                          <label for="laterVerzenden">Later verzenden</label>
+        <div id="laterVerzendenDeel" style="display: none;">
+            <p>Dit is de beschrijving voor de e-mail. 
+               Dit wordt alleen gebruikt als geheugensteuntje om te weten waar de mail over gaat en wordt nergens gebruikt.</p>
+            <strong>Beschrijving</strong>
+            <input placeholder="Beschrijving" type="text" id="beschrijving" name="mailBeschrijving"/>
+            <br /> 
+            <p>
+                Dit is de datum waarop de email wordt verzonden.
+            </p>
+            <strong>Verzenddatum</strong>
+            <input id="datetimepicker" type="text" placeholder="Verzenddatum"/>
+        </div>
+        <br/>
+        <br/>
+        <input type="submit" value="Toevoegen"/>
+    </form>
+</div>
+<link href="~/css/jquery.datetimepicker.css" rel="stylesheet" />
+<script src="~/js/jquery.datetimepicker.js" type="text/javascript"></script>
+<script type="text/javascript">
+    $(document).ready(function () {
+        $('#datetimepicker').datetimepicker({
+            format: 'd.m.Y H:i',
+            lang: 'nl'
+        });
+        $('#IedereenCheck').change(function () {
+            $('#SelectGroup :input').prop('checked', $('#IedereenCheck').is(':checked'));
+        })
+        $('#EnkelCheck').change(function () {
+            if ($(this).is(':checked')) {
+                $("#enkelEmail").show();
+                $("#meerdereMensen").hide();
+            }
+            else {
+                $("#enkelEmail").hide();
+                $("#meerdereMensen").show();
+            }
+        }).change();
+        $("#meteenVerzenden").change(function () {
+            if ($(this).is(':checked')) {
+                $(":submit").attr('value', 'Verzenden');
+            }
+            else {
+                $(":submit").attr('value', 'Toevoegen');
+            }
+        })
+        $("#laterVerzenden").change(function () {
+            if ($(this).is(':checked')) {
+                $("#laterVerzendenDeel").show();
+            }
+            else {
+                $("#laterVerzendenDeel").hide();
+            }
+        })
+    });
+</script>

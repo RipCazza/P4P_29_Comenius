@@ -1,0 +1,6 @@
+C:\Users\Earde\Documents\Visual Studio 2013\Projects\Rooster\ProfielkeuzeRoosterSoftware\bin\Debug\ProfielkeuzeRoosterSoftware.exe.config
+C:\Users\Earde\Documents\Visual Studio 2013\Projects\Rooster\ProfielkeuzeRoosterSoftware\bin\Debug\ProfielkeuzeRoosterSoftware.exe
+C:\Users\Earde\Documents\Visual Studio 2013\Projects\Rooster\ProfielkeuzeRoosterSoftware\bin\Debug\ProfielkeuzeRoosterSoftware.pdb
+C:\Users\Earde\Documents\Visual Studio 2013\Projects\Rooster\ProfielkeuzeRoosterSoftware\obj\Debug\ProfielkeuzeRoosterSoftware.csprojResolveAssemblyReference.cache
+C:\Users\Earde\Documents\Visual Studio 2013\Projects\Rooster\ProfielkeuzeRoosterSoftware\obj\Debug\ProfielkeuzeRoosterSoftware.exe
+C:\Users\Earde\Documents\Visual Studio 2013\Projects\Rooster\ProfielkeuzeRoosterSoftware\obj\Debug\ProfielkeuzeRoosterSoftware.pdb

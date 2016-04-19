@@ -1,0 +1,172 @@
+﻿@{
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    var rol = "";
+    Layout = "~/Layout/_siteLayout.cshtml";
+    var datums = db.Query("SELECT DISTINCT datum FROM voorlichtingen");
+    int dagenTotVoorlichting = (int)(DateTime.MaxValue - DateTime.Now).TotalDays + 1;
+    foreach (var datum in datums)
+    {
+        DateTime geldigeVoorlichtingsDatum;
+        bool validDateTime = DateTime.TryParse(datum.datum, out geldigeVoorlichtingsDatum);
+        if (validDateTime && (geldigeVoorlichtingsDatum - DateTime.Now).TotalDays < dagenTotVoorlichting)
+        {
+            dagenTotVoorlichting = (int)(geldigeVoorlichtingsDatum - DateTime.Now).TotalDays;
+        }
+    }
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            //Als de hash ongeldig is word je uitgelogd
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            //De rol wordt aangevraagd en je sessie wordt verlengd
+            rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol == "mentor" || rol == "leerling" || rol == "decaan")
+            {
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30); 
+            }    
+            else
+            {
+                //Als je rol niet mentor, decaan of leerling is word je doorverwezen
+                Response.Redirect("~/Redirect");
+            }
+        }
+    }
+    else
+    {
+        //Doorverwijzen als je niet ingelogd bent
+        Response.Redirect("~/?a=uitloggen");
+    }
+}
+
+<div class="card-panel">
+    <a href="~/Redirect">Terug naar de vorige pagina</a>
+	
+    @if(dagenTotVoorlichting > 7) 
+	{ 
+		if(rol == "mentor" || rol =="decaan" || rol == "leraar")
+		{   
+			var id = Request.Params["id"];
+			var volledigeNaam = db.QuerySingle("SELECT voornaam, achternaam FROM Leerling WHERE gebruikerId = @0", id);
+			
+			string voorlichtingen = db.QueryValue("SELECT keuze1 FROM Keuze WHERE gebruikerId = @0", id);
+			<div class="z-depth-1" style="padding:1%">
+				<h5>@volledigeNaam.voornaam @volledigeNaam.achternaam heeft de volgende voorlichtingenkeuzes:</h5>
+				@if (voorlichtingen != null)
+				{
+					<ol>
+						@foreach(var voorlichting in voorlichtingen)
+						{
+							if(Convert.ToString(voorlichting) != ",")
+							{
+								string voorlichtingNaam = db.QueryValue("SELECT Vaknaam FROM Vakken WHERE Vakid = @0", Convert.ToString(voorlichting));
+								<li>@voorlichtingNaam</li>
+							}
+						}
+					</ol>
+				}
+				else
+				{
+					<p>Er zijn geen voorlichtingenkeuzes bekend.</p>
+				}
+			</div>
+		}
+        else
+        {
+            <p>Sorry, er is geen roosters bekend.</p>
+        }
+    }
+	else
+	{
+		if(rol == "mentor" || rol =="decaan" || rol == "leraar")
+		{
+			var id = Request.Params["id"];
+			var volledigeNaam = db.QuerySingle("SELECT voornaam, achternaam FROM Leerling WHERE gebruikerId = @0", id);
+
+			<h5 style="color:#0085bc">Rooster van @volledigeNaam.voornaam @volledigeNaam.achternaam.</h5>
+		}
+		<table class="responsive-table hoverable">
+			<thead>
+				<tr>
+					<th>Tijd</th>
+					<th>Datum</th>
+					<th>Vak</th>
+					<th>Lokaal</th>
+				</tr>
+			</thead>
+			<tbody>
+				@if(rol == "leerling")
+				{
+					string rondeids = db.QueryValue("SELECT ronde1 FROM carousel WHERE gebruikerId = @0", accountId);
+					if(rondeids == null)
+					{
+						<tr>
+							<td>-</td>
+							<td>-</td>
+							<td>-</td>
+							<td>-</td>
+						</tr>
+						<p>Sorry, er is geen rooster bekend.</p>
+					}
+					else
+					{
+						var ids = rondeids.Split(',');
+						foreach(var blok in ids)
+						{
+							var rooster = db.QuerySingle("SELECT vak, lokaal, datum, rondeId FROM Voorlichtingen WHERE vakid = @0", blok);
+							<tr>    
+								<td>@rooster.rondeId</td>
+								<td>@rooster.datum</td>
+								<td>@rooster.vak</td>
+								<td>@rooster.lokaal</td>
+							</tr>
+						}   
+					}                 
+				}
+				else if(rol == "mentor" || rol == "decaan" || rol == "leraar")
+				{
+					var id = Request.Params["id"];
+					string rondeids = db.QueryValue("SELECT ronde1 FROM carousel WHERE gebruikerId = @0", id);
+					if(rondeids == null)
+					{
+						<tr>
+							<td>-</td>
+							<td>-</td>
+							<td>-</td>
+							<td>-</td>
+						</tr>
+						<p>Sorry, er is geen rooster bekend.</p>
+					}
+					else
+					{
+						var ids = rondeids.Split(',');
+						foreach(var blok in ids)
+						{
+							var rooster = db.QuerySingle("SELECT vak, lokaal, datum, rondeId FROM Voorlichtingen WHERE vakid = @0", blok);
+							<tr>    
+								<td>@rooster.rondeId</td>
+								<td>@rooster.datum</td>
+								<td>@rooster.vak</td>
+								<td>@rooster.lokaal</td>
+							</tr>
+						}
+					}   
+				}
+			</tbody>
+		</table>
+    }
+</div>

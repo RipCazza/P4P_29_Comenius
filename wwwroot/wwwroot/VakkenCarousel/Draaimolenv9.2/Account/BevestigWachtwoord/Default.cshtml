@@ -1,0 +1,77 @@
+﻿@{
+     Layout = "~/Layout/_siteLayoutNoNavbar.cshtml";
+     string errormsg = "";
+     string confirmationToken = Request["ConfirmationToken"];
+     string userId = Request["UserId"];
+     if (string.IsNullOrEmpty(confirmationToken) || string.IsNullOrEmpty(userId))
+     {
+         //de url bevat geen token
+         errormsg = "Er ontbreken parameters in de URL.";
+     }
+     else
+     {
+         //er is een token meegestuurd
+         //check of deze token geldig is
+         Database db = Database.Open("Draaimolen");
+         //de token klopt
+         string realToken = db.QueryValue("SELECT confirmationToken FROM Gebruiker WHERE GebruikerId = @0",userId);
+         //de token is nog niet verlopen
+         string validTillStr = Convert.ToString(db.QueryValue("SELECT tokenValidTill FROM Gebruiker WHERE GebruikerId = @0", userId));
+         DateTime validTill = DateTime.MinValue;
+         bool containsValidTill = DateTime.TryParse(validTillStr, out validTill);
+         if(realToken == confirmationToken)
+         {
+             if(containsValidTill)
+             {
+                if(DateTime.Now < validTill)
+                {
+                    //maak een nieuw wachtwoord aan 
+                    Random random = new Random();
+                    string password = RandomPass.GeneratePass(12, random);
+                    string salt = LoginSLB.App_Code.Login.GetRandomSalt(password.Length);
+                    string hashedPass = LoginSLB.App_Code.Login.HashPassword(password, salt);
+                    db.Execute("UPDATE Gebruiker SET passwordHash=@0,passwordSalt=@1,tokenValidTill=@2 WHERE GebruikerId = @3;", hashedPass, salt, DateTime.Now, userId);
+                    //stuur het nieuwe wachtwoord op
+                    var email = db.QueryValue("SELECT email FROM Gebruiker WHERE GebruikerId = @0", userId);
+                    string leftLink = HttpContext.Current.Request.Url.GetLeftPart(UriPartial.Authority);
+                    string resetMail =String.Format(Mailtjes.begin +
+                                        @"Je hebt onlangs je wachtwoord gewijzigd.
+                                    <br>
+                                    Dit zijn je nieuwe inloggegevens:
+                                    <br>
+                                    E-mailadres: {0}
+                                    <br>
+                                    Wachtwoord: {1}
+                                    <br>
+                                    Log <a href=" + leftLink + @">hier</a> in.
+                                    <br>
+                                    Als de bovenstaande link niet werkt:" + leftLink
+                                    + Mailtjes.eind,email,password);
+                    Mail mail = new Mail(resetMail);
+                    if (mail.SendMail(email, "Nieuw wachtwoord"))
+                    {
+                        errormsg = "Er is een email verstuurd met je nieuwe inloggegevens.";
+                    }
+                    else
+                    {
+                        errormsg = "Er is iets fout gegaan met het versturen van je inloggegevens.";
+                    }
+
+                }
+                else
+                {
+                    errormsg = "Deze bevestigingslink is niet meer geldig, vraag een nieuwe aan.";
+                }
+            }
+         }
+         else
+         {
+             errormsg = "De bevestigingslink is niet geldig.";
+         }
+     }
+}
+
+<div class="card-panel">
+    <a href="~/">Terug naar inlogpagina</a>
+    <p style="color:red">@errormsg</p>
+</div>

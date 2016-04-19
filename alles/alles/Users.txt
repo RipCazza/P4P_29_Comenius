@@ -1,0 +1,17 @@
+Ad account info voor server/VPN (voor VPN is sonicwall netextender nodig).
+username: keuze 
+wachtwoord: Beukhout01
+VPN server: vpn.csg-comenius.nl:4433
+Domain: csg-comenius.nl
+ 
+SQL server info.
+Server: comenius-sql01
+user: Draaimolen
+wachtwoord: Blaatschaap01
+Database rechten: Draaimolen
+ 
+Webserver info.
+Remote desktop enabled(start->run->mstsc)
+Server: comenius-keuze.csg-comenius.nl
+username: csg-comenius.nl\Keuze
+wachtwoord: Beukhout01

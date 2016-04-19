@@ -1,0 +1,129 @@
+﻿@{
+     var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    Layout = "~/Layout/_siteLayout.cshtml";
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "decaan")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                //ingelogd
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }
+    /// Selecteert alle vakken die meedoen aan carousel
+    var vakken = db.Query("SELECT niveau, vakid, Vak, Lokaal, email, RondeId, datum FROM voorlichtingen, gebruiker WHERE voorlichtingen.gebruikerID = gebruiker.gebruikerID ORDER BY vak, niveau, datum, rondeID");
+    var error = "";
+    if(IsPost)
+    {
+        string sessionid = Request.Form["check"];
+        //Als op deze knop wordt gedrukt, gebeurt alles in de if.
+        if(Request["submit"].Equals("ToevoegenVoorlichtingen"))
+        {
+            Response.Redirect("~/Decaan/ToevoegenVoorlichting");
+        }
+        if(Request["submit"].Equals("wijzig"))
+        {
+            //Als er geen vakje is gekozen, krijg je deze foutmelding.
+            if(sessionid.IsEmpty())
+            {
+                error = "Geen voorlichtingen geselecteerd!";
+            }
+            else
+            {
+                //De gekozen vakjes worden doorgestuurd naar de pagina Verander Veel
+                Session["sessionid"] = sessionid;
+                Response.Redirect("~/Decaan/VeranderVeel");
+            }
+        }
+        if(Request["submit"].Equals("verwijder"))
+        {
+            if(sessionid.IsEmpty())
+            {
+                //Als er geen vakje is gekozen, krijg je deze foutmelding.
+                error = "Geen voorlichting geselecteerd!";
+            }
+            else
+            {
+                //De id's van de geselecteerde vakjes worden uitelkaar gehaald door de Split en een voor een verwijderd uit de database.
+                var ids = sessionid.Split(',');
+                foreach(var id in ids){
+                    db.Execute("DELETE FROM Voorlichtingen WHERE vakid = @0", id);
+                }
+                Response.Redirect("~/Decaan/VoorlichtingenOverzicht");
+            }
+        }
+    }
+}
+
+<form class="col 12" method="post">
+<div class="card-panel">
+    <a href="~/Decaan">Terug naar vorige pagina</a>
+    <br></br>
+    @*<a href="~/Decaan/ToevoegenVoorlichting" class="waves-effect comeniusblauw btn-large col s12 m6 l3">Voorlichtingen toevoegen</a>*@
+    <a href="~/Decaan/UpdateVoorlichtingen" class="waves-effect comeniusblauw btn-large col s12 m6 l3">Update overzicht</a>
+    <br></br>
+    <h5 class="header" style="color:#0085BC">Voorlichtingen overzicht</h5>
+    <b style="color:red">@error</b> 
+    <table class="responsive-table hoverable z-depth-1">
+        <thead>
+            <tr>
+                @*<th></th>*@
+                <th>Vak</th>
+                <th>Niveau</th>
+                <th>Datum</th>
+                <th>Tijd</th>
+                <th>Lokaal</th>
+                <th>Docent</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach(var vak in vakken){
+            <tr>     
+                @*<td>
+                    <input type="checkbox" name="check" id="@vak.vakId" value="@vak.vakId"/>
+                    <label for="@vak.vakId"></label>
+                </td>*@
+                <td>@vak.vak</td>
+                <td>@vak.niveau</td>
+                <td>@vak.datum</td>
+                <td>@vak.rondeID</td>
+                <td>@vak.lokaal</td> 
+                <td>@vak.email</td>
+            </tr>
+            }
+        </tbody>
+    </table>
+ @*<center> <button type="submit" name="submit" value="wijzig" class="waves-effect  comeniusblauw btn-large col s12 m6 l3">
+        Wijzig voorlichtingen
+    </button>
+    <button type="submit" name="submit" value="verwijder" class="waves-effect  comeniusblauw btn-large col s12 m6 l3">
+        Verwijder voorlichtingen
+    </button>
+     </center> *@ 
+</div>
+</form>

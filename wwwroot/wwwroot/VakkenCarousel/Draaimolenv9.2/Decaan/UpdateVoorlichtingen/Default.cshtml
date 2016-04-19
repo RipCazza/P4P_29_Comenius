@@ -1,0 +1,107 @@
+﻿@using System.Globalization;
+
+@{
+    var db = Database.Open("Draaimolen");
+    var accountId = 0;
+    Layout = "~/Layout/_siteLayout.cshtml";
+    if(Request.Cookies["accountId"] != null)
+    {
+        accountId = Convert.ToInt32(Request.Cookies["accountId"].Value);
+        var hash = db.QueryValue("SELECT passwordHash FROM Gebruiker WHERE GebruikerID = @0", accountId);
+        if (hash != Request.Cookies["hash"].Value)
+        {
+            Response.Cookies["accountId"].Value = "";
+            Response.Cookies["accountId"].Expires = DateTime.Now;
+            Response.Cookies["hash"].Value = "";
+            Response.Cookies["hash"].Expires = DateTime.Now;
+            Response.Redirect("~/");
+        }
+        else
+        {
+            var rol = db.QueryValue(Queries.rolId, accountId);
+            if(rol != "decaan")
+            {
+                Response.Redirect("~/");
+            }
+            else
+            {
+                //ingelogd
+                Response.Cookies["accountId"].Value = accountId.ToString();
+                Response.Cookies["accountId"].Expires = DateTime.Now.AddMinutes(30);
+                Response.Cookies["hash"].Value = hash;
+                Response.Cookies["hash"].Expires = DateTime.Now.AddMinutes(30);
+            }
+        }
+    }
+    else
+    {
+        Response.Redirect("~/");
+    }
+
+    string errormsg = "";
+    string successmsg = "";
+    if(IsPost)
+    {
+        List<DateTime> datumLijst= new List<DateTime>();
+        DateTime datum1;
+        DateTime datum2;
+        var beginDatum = Request.Form["beginDatum"];
+        var eindDatum = Request.Form["eindDatum"];
+        var vakData = db.Query("SELECT vaknaam, niveau, leraar FROM vakken");
+        if(decaan.ValidDatum(beginDatum, out errormsg) && decaan.ValidDatum(eindDatum, out errormsg))
+        {
+            DateTime.TryParse(beginDatum, out datum1);
+            DateTime.TryParse(eindDatum, out datum2);
+            while(datum1 <= datum2)
+            {
+                datumLijst.Add(datum1);
+                datum1 = datum1.AddDays(1);
+            }
+
+            db.Execute("DELETE FROM voorlichtingen");
+            foreach(DateTime datum in datumLijst)
+            {
+                string datumString = datum.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+                foreach(var vakInfo in vakData)
+                {
+                    var lokaal = db.QueryValue("SELECT lokaal FROM lokalen WHERE vak = @0 AND niveau = @1", vakInfo.vaknaam, vakInfo.niveau);
+                    for(int i = 0; i < 4; i++)
+                    {
+                        var tijd = db.QueryValue("SELECT tijd FROM bloktijden WHERE blokId = @0", i);
+                        db.Execute("INSERT INTO voorlichtingen (vak, lokaal, gebruikerId, rondeId, datum, niveau) VALUES (@0, @1, @2, @3, @4, @5)",vakInfo.vaknaam, lokaal, vakInfo.leraar, tijd, datumString, vakInfo.Niveau);
+                    }
+                }
+            }
+            Response.Redirect("~/decaan/VoorlichtingenOverzicht");
+        }
+    }
+}
+
+<div class="card-panel">
+    <a href="~/Decaan">Terug naar vorige pagina</a>
+    <div class="card-panel">
+        <form class="col 12" method="post"> 
+            <h5 class="header" style="color:#0085BC">Voorlichtingen updaten</h5>
+            <p>Vul de begin- en einddatum van de voorlichtingen in.</p>
+            <div class="card-panel">
+                <div class="row">
+                    <p style="color:red">@errormsg</p>
+                    <p style="color:green">@successmsg</p>
+                    <div class="input-field col s12 m6">
+                        <input type="text" name="beginDatum" id="email" required>
+                        <label for="beginDatum">vanaf datum</label>
+                    </div>
+                    <div class="input-field col s12 m6">
+                        <input type="text" name="eindDatum" id="email" required>
+                        <label for="eindDatum">t/m datum</label>
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="waves-effect comeniusblauw btn-large col s12 m6 l3"> Updaten </button>
+        </form>
+    </div>
+</div>
+
+
+
+
