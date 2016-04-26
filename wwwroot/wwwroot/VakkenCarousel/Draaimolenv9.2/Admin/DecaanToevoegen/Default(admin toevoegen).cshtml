@@ -41,7 +41,7 @@
         if  (true == true)//(decaan.ValidEmail(email, out errormsg))
         {
 			Random random = new Random();
-            string rol = "decaan";
+            string rol = "admin";
             string password = "testtesttest";//RandomPass.GeneratePass(12, random);
             string salt = LoginSLB.App_Code.Login.GetRandomSalt(password.Length);
             string hashedPass = LoginSLB.App_Code.Login.HashPassword(password, salt);
